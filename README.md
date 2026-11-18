@@ -1,130 +1,164 @@
-<p align="center"><a href="https://alexbeavs-ps1-ports.github.io/psxrecomp-ports/"><img src="https://raw.githubusercontent.com/alexbeavs-ps1-ports/psxrecomp-ports/main/docs/assets/alexbeav-ps1-recomps-banner.png" alt="Alexbeav's PS1 Recomps" width="100%"></a></p>
+# THPS2 for New Nintendo 3DS
 
-# Tony Hawk's Pro Skater 2 Recompiled
+A work-in-progress port of the PlayStation version of **Tony Hawk's Pro Skater 2**
+(USA, SLUS-01066) to the **New Nintendo 3DS**, aiming for full speed and a
+60 fps presentation.
 
-<!-- retcomm-readme-metrics -->
-[![GitHub downloads (all assets, all releases)](https://img.shields.io/github/downloads/Alexbeav/tony-hawk-s-pro-skater-2-recomp/total)](https://github.com/Alexbeav/tony-hawk-s-pro-skater-2-recomp/releases)
-[![GitHub downloads (latest release)](https://img.shields.io/github/downloads/Alexbeav/tony-hawk-s-pro-skater-2-recomp/latest/total)](https://github.com/Alexbeav/tony-hawk-s-pro-skater-2-recomp/releases/latest)
-[![GitHub release](https://img.shields.io/github/v/release/Alexbeav/tony-hawk-s-pro-skater-2-recomp)](https://github.com/Alexbeav/tony-hawk-s-pro-skater-2-recomp/releases/latest)
-<!-- /retcomm-readme-metrics -->
+It is built on a *static recompilation* of the game: the PS1 MIPS code is
+translated to C ahead of time by [psxrecomp](https://github.com/RetroPortingToolKit/psxrecomp)
+and linked against a runtime that stands in for the PlayStation hardware. This
+repository starts from Alexbeav's desktop recompilation,
+[tony-hawk-s-pro-skater-2-recomp](https://github.com/Alexbeav/tony-hawk-s-pro-skater-2-recomp),
+and adds the 3DS port on top.
 
-Static recompilation of **Tony Hawk's Pro Skater 2** built on
-[psxrecomp](https://github.com/mstan/psxrecomp) and
-[recomp-ui](https://github.com/mstan/recomp-ui).
-
-Tony Hawk's Pro Skater 2 recompiled for modern systems using psxrecomp.
-
-| | |
-|---|---|
-| Players | 2 |
-| Region | USA |
-| Publisher | Activision |
-| Year | 2000 |
-
-Scaffolded with the New Project Layout. See
-`psxrecomp/docs/GAME_PROJECT_SETUP.md` for the full flow.
-
-<!-- release-standard:bios -->
-**BIOS:** SCPH-1001 (USA) retail BIOS, 524288 bytes, SHA-256 `71af94d1e47a68c11e8fdb9f8368040601514a42a5a399cda48c7d3bff1e99d3`. Supply your own dump; releases do not use OpenBIOS.
-<!-- /release-standard:bios -->
+Nothing from the game ships here. You need your own disc image and your own
+PlayStation BIOS dump.
 
 ## Status
 
-Latest release: v0.1.5, built on psxrecomp pin I 0.1.23.
+| Milestone | State |
+|---|---|
+| macOS build plays through menus into a level at full speed | **done** |
+| 3DS toolchain set up; feasibility check of the code on ARM | **done**: 278 of 290 source files compile unchanged |
+| 3DS build boots the PlayStation BIOS | next |
+| In-game on 3DS (disc reads from SD, input, menus) | planned |
+| Audio, full speed, citro3d GPU renderer | planned |
+| Widescreen, stereoscopic 3D, bottom-screen UI, 60 fps | planned |
+| CIA packaging | planned |
 
-- Packages for Windows x64, Linux x64, macOS Apple Silicon and macOS Intel passed the CI build and package checks.
-- Replay check: on Windows, a build on pin I 0.1.23 played 1 of 1 recorded route to the end without a crash. That check compares memory, not the picture, and is not a play test.
-- Not claimed: full-game completion, audio fidelity or multiplayer. Setup and gameplay reports from Linux, macOS and Steam Deck are welcome.
+There is no 3DS build to download yet. The plan, the findings so far and the
+technical constraints are in [docs/N3DS_PORT_PLAN.md](docs/N3DS_PORT_PLAN.md).
 
-Known issues for the current version are in its [release notes](https://github.com/alexbeavs-ps1-ports/tony-hawk-s-pro-skater-2-recomp/releases/tag/v0.1.5).
+## What you need
 
-<!-- retcomm-readme-launcher -->
-## RetComM Launcher
+**Game files (yours, never committed):**
 
-You can run this title **standalone** (release zip + the built-in recomp-ui
-Generate & Build flow), or manage installs, updates, ROM/BIOS wiring, and queued
-builds more intuitively with
-**[RetComM Launcher](https://github.com/TechnicallyComputers/RetComM-Launcher)** —
-the Retro Compilation Manager hub for self-compiling recomps.
+- A dump of the USA disc, SLUS-01066. Either a `.chd`, or the raw
+  `.bin`/`.cue`. The data track must match the Redump dump
+  (MD5 `ac85ae22723eaf944b0f899aa53244dd`). The build checks this.
+- The SCPH-1001 BIOS, 512 KB, SHA-256
+  `71af94d1e47a68c11e8fdb9f8368040601514a42a5a399cda48c7d3bff1e99d3`.
+  Other BIOS revisions and OpenBIOS are not accepted.
 
-[Downloads](https://github.com/TechnicallyComputers/RetComM-Launcher/releases) ·
-[Full README & features](https://github.com/TechnicallyComputers/RetComM-Launcher#readme)
+Put them here; all of these folders are gitignored:
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/TechnicallyComputers/RetComM-Launcher/main/docs/screenshots/hub-and-game-launcher.png" alt="RetComM hub with a background build, next to a title’s recomp-ui launcher" width="720">
-</p>
+```
+bios/SCPH1001.bin
+disk/<your image>.chd        (or a .bin/.cue pair)
+```
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/TechnicallyComputers/RetComM-Launcher/main/docs/screenshots/queue-and-background-build.png" alt="Background cmake build with titles queued" width="720">
-</p>
+**macOS tools:**
 
-RetComM checks for updates, rebuilds with existing build data when possible,
-uses the same platform build tools as per-title launchers, and automates
-BIOS/ROM/save plumbing so you are not stuck repeating each game’s wizard by hand.
-<!-- /retcomm-readme-launcher -->
+- Xcode Command Line Tools (`xcode-select --install`)
+- Python 3.9 or newer
+- CMake 3.20 or newer and Ninja. With Homebrew: `brew install cmake ninja`.
+  Without it: `python3 -m pip install cmake ninja`.
 
-## Legal
+SDL3 is built from a copy vendored in psxrecomp; nothing else needs installing.
 
-You must own the original game. Disc images under `disc/` are gitignored and
-must never be committed. Retail BIOS dumps are not redistributed. This title
-requires a legal SCPH-1001 BIOS dump. OpenBIOS is not a qualified route.
+**For the 3DS work:** [devkitPro](https://devkitpro.org/wiki/Getting_Started)
+with the `3ds-dev` group and `3ds-zlib`
+(`sudo dkp-pacman -S 3ds-dev 3ds-zlib`).
 
-Project-owned files use `PolyForm Noncommercial 1.0.0`. This license does not cover psxrecomp,
-recomp-ui, game data, generated retail code, artwork, names, or trademarks.
-See `THIRD_PARTY_NOTICES.md` for the separate dependency licenses.
+## Building for macOS
 
-Default app icon: `assets/psxrecomp.ico` (and `.png` / `.svg`) — RetComM-themed controller mark from `psxrecomp/assets/`. Windows builds embed it via `APP_ICON`.
-
-Optional box art under `launcher_assets/img/` may come from
-[libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails)
-(`Named_Boxarts`); see `BOXART_SOURCE.txt` when present.
-
-## Quick start (dev)
+The desktop build is the reference every 3DS result is checked against.
 
 ```bash
-git submodule update --init --recursive
-./psxrecomp/tools/ci/build_emitters.sh
-python3 psxrecomp/psxrecomp_cli.py generate \
-  --config game.toml --project-root . --disc disc/<your>.cue
+git clone --recursive https://github.com/p-gonzo/thps2-n3ds.git
+cd thps2-n3ds
+```
+
+Build the recompiler, then generate the game's C from your disc. Generation
+verifies the disc, extracts a raw `.bin`/`.cue` and the game executable into
+`disc/`, and writes about 8 million lines of C into `generated/`:
+
+```bash
+bash psxrecomp/tools/ci/build_emitters.sh
+```
+
+```bash
+python3 psxrecomp/psxrecomp_cli.py generate --config game.toml --project-root . --disc disk/<your image>.chd --bios bios/SCPH1001.bin
+```
+
+Build and run:
+
+```bash
 cmake -S . -B build-release -G Ninja -DCMAKE_BUILD_TYPE=Release
+```
+
+```bash
 cmake --build build-release --target psx-runtime
 ```
 
-Zip prefix for CI artifacts: `tony-hawk-s-pro-skater-2-recomp`.
+```bash
+./build-release/Tony_Hawks_Pro_Skater_2_Recompiled
+```
 
-## Symbols
+If the launcher window appears, `--no-launcher` skips it and boots straight
+into the game.
 
-Progressive map: `symbols.toml` → `python3 tools/sync_symbols.py` →
-`psx_symbols.h` (`PSX_FN_*`). See `psxrecomp/docs/SYMBOLS.md`.
+### Automated smoke test
 
-## Framework pins
+A build with the debug server enabled can be driven over TCP (port 4370):
 
-Submodule gitlinks (`psxrecomp`, optional `recomp-ui`, nested `recomp-net`)
-are authoritative. `framework_pins.txt` is an optional scaffold snapshot;
-release CI logs SHAs with `record_pins.sh` but builds whatever the gitlinks
-resolve to. Bump submodules deliberately — do not float on `main`/`master`
-in release CI.
+```bash
+cmake -S . -B build-dbg -G Ninja -DCMAKE_BUILD_TYPE=Release -DPSX_DEBUG_TOOLS=ON
+```
 
-## About this project
+```bash
+cmake --build build-dbg --target psx-runtime
+```
 
-These ports are developed by a hobbyist (a DevSecOps engineer, not a game
-programmer) with substantial AI assistance. What keeps that honest: every
-change is validated before it ships - boot gates, hardware-oracle A/B
-comparisons (Beetle/DuckStation), deterministic replay probes, and a shared
-findings registry that documents failures as carefully as successes. AI
-writes most of the code; the evidence discipline decides what survives.
-Bug reports welcome - expect them to be investigated the same way.
+```bash
+python3 tools/smoke_test.py
+```
 
-tl;dr AI writes the code, but I always test it myself before pushing
+It boots the game in a hidden window, presses through the menus into The
+Hangar, and saves timed screenshots to `out/captures/smoke/`. It prints the
+game's frame number at each shot; about 60 per second means full speed.
+`tools/psx_debug.py` sends single commands to a running game.
 
-<!-- retcomm-readme-raid -->
----
+## Repository layout
 
-<p align="center">
-  <sub><b>R.A.I.D. — Retro AI Development</b> · a Discord for AI-assisted retro reverse-engineering, decomp &amp; recomp</sub>
-</p>
+| Path | What it is |
+|---|---|
+| `psxrecomp/` | Submodule: the recompiler and PS1 runtime. Fork [p-gonzo/psxrecomp](https://github.com/p-gonzo/psxrecomp), branch `n3ds`, tracking RetroPortingToolKit. 3DS changes to the framework go there. |
+| `recomp-ui/` | Submodule: the desktop launcher and menus ([RetroPortingToolKit/recomp-ui](https://github.com/RetroPortingToolKit/recomp-ui)). Not used on 3DS. |
+| `game.toml`, `seeds/`, `symbols.toml` | The title's configuration for psxrecomp. |
+| `tools/` | Smoke test, debug client, symbol sync. |
+| `docs/N3DS_PORT_PLAN.md` | The port plan. |
+| `generated/`, `disc/`, `build-*/`, `out/` | Build output and extracted data. Gitignored; never commit them. |
 
-<p align="center">
-  <a href="https://discord.gg/Ad9BwSzctP"><img src=".github/raid-discord.png" alt="Join the Retro AI Development (R.A.I.D.) Discord" width="200"></a>
-</p>
-<!-- /retcomm-readme-raid -->
+Branches: `main` mirrors upstream; port work lands on `n3ds`.
+
+To pull framework updates, from inside `psxrecomp/`:
+
+```bash
+git fetch rptk && git merge rptk/master
+```
+
+Push the psxrecomp fork's branch **before** committing the new submodule
+version here, or fresh clones will point at a commit that does not exist.
+
+## Credits
+
+- **Alexbeav**: the THPS2 recompilation this project starts from.
+- **psxrecomp** by mstan and the [RetroPortingToolKit](https://github.com/RetroPortingToolKit)
+  team: the recompiler and PS1 runtime.
+- **CTR-3D** by [zando95](https://github.com/zando95/CTR-3D) and
+  [tinaut1986](https://github.com/tinaut1986/CTR-3D): the reference for the
+  3DS platform layer (threads, audio, rendering rules, packaging). Their port
+  is built on a decompilation, so only those platform patterns carry over.
+
+## Legal
+
+This is a non-commercial fan project, not affiliated with or endorsed by
+Activision, Neversoft, Sony or Nintendo. Tony Hawk's Pro Skater is a trademark
+of Activision. You must own the original game. Disc images, BIOS dumps,
+generated code and anything extracted from the disc are gitignored and must
+never be committed or distributed.
+
+Project-owned files are licensed under `PolyForm Noncommercial 1.0.0` (see
+[LICENSE](LICENSE)). psxrecomp, recomp-ui and the other dependencies keep their
+own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

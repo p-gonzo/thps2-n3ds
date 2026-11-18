@@ -17,6 +17,7 @@
 
 # Local PlayStation assets (never commit dumps / BIOS)
 /bios/
+/disk/
 /isos/
 /saves/
 /prepared_disc/
@@ -82,3 +83,15 @@ starvation_dump.jsonl
 !/disc_probe.[0-9].json
 !/disc_probe.[0-9][0-9].json
 !/disc_set.json
+
+# Runtime state written next to a launch
+keybinds.ini
+overlay_captures.json.d/
+
+# Nintendo 3DS build outputs (port work; never ship game data inside them)
+*.3dsx
+*.cia
+*.elf
+*.smdh
+*.t3x
+*.shbin
