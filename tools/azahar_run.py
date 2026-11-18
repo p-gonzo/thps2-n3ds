@@ -7,7 +7,7 @@ build routes stdout/stderr to) with timestamps.
 
     python3 tools/azahar_run.py                 # run, stop waiting once it exits
     python3 tools/azahar_run.py --timeout 120   # give a running game longer
-    python3 tools/azahar_run.py --keep          # leave Azahar open afterwards
+    python3 tools/azahar_run.py --keep          # leave Azahar open afterwards (default: always close)
 
 Needs Azahar's "instant debug log" setting on and a log filter that includes
 Debug.Emulated:Debug (both in Azahar's qt-config.ini).
@@ -26,6 +26,8 @@ GAME = os.path.join(SUPPORT, "sdmc/3ds/thps2/thps2.3dsx")
 
 OUT = re.compile(r"^\[\s*([0-9.]+)\] Debug\.Emulated <Debug> \S+: ?(.*)$")
 END = re.compile(r"Cleaning up process|<Critical>")
+FPS = re.compile(r"\[FPS\] game: ([0-9.]+) fps .*frames: (\d+)")
+RANGES = ((20, 70, "BIOS start"), (125, 200, "Sony logo"))
 
 
 def azahar_pids():
@@ -49,6 +51,9 @@ def main():
     ap.add_argument("--game", default=GAME)
     ap.add_argument("--timeout", type=float, default=60.0, help="seconds to wait while it keeps running")
     ap.add_argument("--keep", action="store_true", help="leave Azahar open at the end")
+    ap.add_argument("--quiet", action="store_true", help="print only [FPS] lines and the summary")
+    ap.add_argument("--until-frame", type=int, default=0,
+                    help="stop once an [FPS] line reports this guest frame (needs PSX_FPS_TELEMETRY=1)")
     a = ap.parse_args()
 
     close_azahar()
@@ -71,26 +76,37 @@ def main():
 
     seen = 0
     ended = False
+    fps_lines = []
     while time.time() - started < a.timeout:
         with open(LOG, errors="replace") as f:
             lines = f.read().splitlines()
         for line in lines[seen:]:
             m = OUT.match(line)
             if m and m.group(2).strip():
-                print(f"{float(m.group(1)):8.3f}  {m.group(2)}", flush=True)
+                text = m.group(2)
+                fm = FPS.search(text)
+                if fm:
+                    fps_lines.append((float(fm.group(1)), int(fm.group(2))))
+                if not a.quiet or fm:
+                    print(f"{float(m.group(1)):8.3f}  {text}", flush=True)
             if END.search(line):
                 print(f"{'':8}  [{line.split('> ', 1)[-1].strip()}]", flush=True)
                 ended = True
         seen = len(lines)
-        if ended:
+        if ended or (a.until_frame and fps_lines and fps_lines[-1][1] >= a.until_frame):
             break
         time.sleep(0.25)
 
     waited = time.time() - started
     print(f"-- {'process ended' if ended else 'still running'} after {waited:.1f}s of wall time")
-    # A program that ended leaves Azahar on its game list: close it. One that
-    # is still running stays open so it can be watched.
-    if ended and not a.keep:
+    # Median fps over fixed guest-frame windows: comparable across builds.
+    for lo, hi, label in RANGES:
+        vals = sorted(f for f, fr in fps_lines if lo < fr <= hi)
+        if vals:
+            print(f"-- fps {label:>14} (frames {lo}-{hi}): {vals[len(vals) // 2]:5.1f}  ({len(vals)} readings)")
+    # Always close Azahar when done (ended, reached --until-frame, or timed
+    # out); --keep leaves it open for a run meant to be watched.
+    if not a.keep:
         close_azahar()
 
 

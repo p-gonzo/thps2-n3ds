@@ -21,6 +21,13 @@ if(NINTENDO_3DS)
         set(${_psx_off} OFF CACHE BOOL "Off on Nintendo 3DS" FORCE)
     endforeach()
     set(_psx_title_surfaces "")
+    # Release optimisation for the 3DS (ARM11, ARM mode). Measured in Azahar at
+    # 804 MHz, Sony logo: -O2 6.0 fps, -O3 6.6, -Os 5.0; see docs/N3DS_PORT_PLAN.md.
+    # Azahar has no cache model, so -Os (half the code) may do better on
+    # hardware; THPS2_N3DS_GENERATED_CFLAGS=-Os is the mixed option.
+    set(THPS2_N3DS_OPT "-O3" CACHE STRING "Release optimisation level for 3DS builds")
+    set(CMAKE_C_FLAGS_RELEASE "${THPS2_N3DS_OPT} -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "${THPS2_N3DS_OPT} -DNDEBUG")
 else()
     set(PSX_SETUP_WIZARD ON CACHE BOOL
         "Advertise first-run setup wizard + Generate & rebuild in recomp-ui" FORCE)
@@ -60,6 +67,23 @@ if(NINTENDO_3DS)
         DESCRIPTION "Tony Hawk's Pro Skater 2 static recompilation (your own disc)"
         AUTHOR "thps2-n3ds")
     ctr_create_3dsx(psx-runtime OUTPUT thps2.3dsx SMDH thps2.smdh)
+
+    # Optional extra flags for the recompiled game and BIOS code only (about
+    # 20 MB of machine code, mostly cold), e.g. "-Os" to halve its size while
+    # the runtime keeps CMAKE_BUILD_TYPE's optimisation. Appended after the
+    # build-type flags, so its -O level wins for these files.
+    set(THPS2_N3DS_GENERATED_CFLAGS "" CACHE STRING
+        "Extra compile flags for generated game/BIOS C (3DS builds)")
+    if(THPS2_N3DS_GENERATED_CFLAGS)
+        separate_arguments(_thps2_gen_flags UNIX_COMMAND "${THPS2_N3DS_GENERATED_CFLAGS}")
+        file(GLOB _thps2_gen_sources
+            "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.c"
+            "${PSXRECOMP_ROOT}/generated/SCPH1001_*.c")
+        set_source_files_properties(${_thps2_gen_sources}
+            TARGET_DIRECTORY psx-runtime
+            PROPERTIES COMPILE_OPTIONS "${_thps2_gen_flags}")
+        message(STATUS "thps2-n3ds: generated code gets ${THPS2_N3DS_GENERATED_CFLAGS}")
+    endif()
 endif()
 
 # Stage runtime configs next to the exe for direct build/ launches. Only copy

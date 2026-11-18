@@ -179,6 +179,24 @@ Done so far:
   rotated pass instead of three SDL CPU passes. Removed SDL's blitters from
   the profile; logo 1.9 -> 2.1 fps. Presentation was never the main cost.
 
+Compiler settings (Azahar, 804 MHz; ARM11 is ARMv6K, so Thumb would be Thumb-1
+and is not a candidate):
+
+| Build | BIOS start | Sony logo | `.text` |
+|---|---|---|---|
+| `-O2` | 16.4 fps | 6.0 fps | 20.2 MB |
+| **`-O3` (now the 3DS default, `THPS2_N3DS_OPT`)** | **17.3** | **6.6** | 20.4 MB |
+| `-O3` runtime + `-Os` generated (`THPS2_N3DS_GENERATED_CFLAGS=-Os`) | 15.7 | 6.4 | 11.6 MB |
+| `-Os` | 13.4 | 5.0 | 9.8 MB |
+
+Azahar has no cache model, so it cannot reward smaller code. Compare `-O3`
+against the mixed build on hardware before settling.
+
+64-bit arithmetic: GDB breakpoints on the 64-bit division helpers found one hot
+caller, the always-on guest-cycle profiler (`psx_cycle_sample_check`); it no
+longer divides in the common case. Turning that profiler off entirely
+(`PSX_GCP_PERIOD=0`) changed nothing measurable.
+
 Where the time goes (Mac `sample`, emulation thread, logo/boot frames; guest
 game code itself is a small minority):
 
