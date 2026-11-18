@@ -20,6 +20,7 @@ PlayStation BIOS dump.
 |---|---|
 | macOS build plays through menus into a level at full speed | **done** |
 | 3DS toolchain set up; feasibility check of the code on ARM | **done**: 278 of 290 source files compile unchanged |
+| 3DS build compiles and links | **done**; does not fit in memory yet (see plan) |
 | 3DS build boots the PlayStation BIOS | next |
 | In-game on 3DS (disc reads from SD, input, menus) | planned |
 | Audio, full speed, citro3d GPU renderer | planned |

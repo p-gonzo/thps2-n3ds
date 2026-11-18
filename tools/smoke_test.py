@@ -35,14 +35,26 @@ def main():
     ap.add_argument("--bios", default=os.path.join(ROOT, "bios", "SCPH1001.bin"))
     ap.add_argument("--disc", default=os.path.join(ROOT, "disc", "Tony Hawk's Pro Skater 2 (USA).cue"))
     ap.add_argument("--out", default=os.path.join(ROOT, "out", "captures", "smoke"))
+    ap.add_argument("--renderer", choices=["opengl", "software", "vulkan"],
+                    help="override the renderer (default: the game's own setting)")
+    ap.add_argument("--audio", action="store_true",
+                    help="play sound (default: muted through SDL's dummy audio driver)")
     a = ap.parse_args()
 
     exe = os.path.abspath(a.exe)
     exe_dir = os.path.dirname(exe)
     os.makedirs(a.out, exist_ok=True)
     log = open(os.path.join(a.out, "run.log"), "w")
-    proc = subprocess.Popen([exe, "--no-launcher", "--hidden-window", "--bios", os.path.abspath(a.bios),
-                             "--disc", os.path.abspath(a.disc)], cwd=exe_dir, stdout=log, stderr=subprocess.STDOUT)
+    cmd = [exe, "--no-launcher", "--hidden-window", "--bios", os.path.abspath(a.bios),
+           "--disc", os.path.abspath(a.disc)]
+    if a.renderer:
+        cmd += ["--renderer", a.renderer]
+    env = dict(os.environ)
+    if not a.audio:
+        # SDL still opens a device and drains it in real time, so pacing is
+        # unchanged; nothing reaches the speakers.
+        env["SDL_AUDIO_DRIVER"] = "dummy"
+    proc = subprocess.Popen(cmd, cwd=exe_dir, env=env, stdout=log, stderr=subprocess.STDOUT)
     try:
         dbg = None
         for _ in range(60):
@@ -64,9 +76,13 @@ def main():
                 n += 1
                 name = f"shot_{n:02d}_{at:03d}s.png"  # the server only accepts paths relative to the exe
                 frame = dbg("frame").get("frame")
-                dbg("screenshot", path=name)
-                shutil.move(os.path.join(exe_dir, name), os.path.join(a.out, name))
-                print(f"{at:4d}s  frame {frame:>6}  {name}", flush=True)
+                shot = dbg("screenshot", path=name)
+                src = os.path.join(exe_dir, name)
+                if shot.get("ok") and os.path.exists(src):
+                    shutil.move(src, os.path.join(a.out, name))
+                    print(f"{at:4d}s  frame {frame:>6}  {name}", flush=True)
+                else:
+                    print(f"{at:4d}s  frame {frame:>6}  no screenshot: {shot.get('error', shot)}", flush=True)
             else:
                 dbg("set_input", buttons=START if act == "start" else CROSS)
                 time.sleep(0.15)

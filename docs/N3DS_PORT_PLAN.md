@@ -90,6 +90,33 @@ Overlays: on macOS THPS2 only ever executed 7 small RAM code pages (4–12 KB,
 mostly BIOS kernel stubs around `0x80000000`). The interpreter covers them;
 static AOT overlays are an optimization, not a blocker.
 
+## Milestone 1 progress (2026-11-18)
+
+The real psxrecomp build now configures, compiles and **links** for the 3DS
+(psxrecomp `n3ds` `46ef4d9`):
+
+```bash
+export DEVKITPRO=/opt/devkitpro DEVKITARM=/opt/devkitpro/devkitARM
+cmake -S . -B build-3ds -G Ninja -DCMAKE_TOOLCHAIN_FILE=$DEVKITPRO/cmake/3DS.cmake \
+  -DCMAKE_BUILD_TYPE=Release -DPSX_RECOMP_UI=OFF -DPSX_ENABLE_VULKAN=OFF \
+  -DPSX_DEBUG_TOOLS=OFF -DPSX_NETPLAY=OFF -DPSX_REWIND=OFF
+ninja -C build-3ds psx-runtime
+```
+
+What changed in the framework: GL 1.1 is loaded through SDL so nothing links
+against GL (the 3DS falls back to the software renderer); an ARM fiber backend;
+honest "unavailable" paths where Horizon cannot spawn, exec or dlopen; a few
+portability fixes. macOS OpenGL and software renderers still reach gameplay at
+full speed.
+
+**Blocker: memory.** `.text` 21 MB and `.rodata` 27 MB fit, but `.bss` is
+**741 MB** against roughly 124 MB of New 3DS application memory. About 600 MB
+of it is diagnostic recording rings compiled into every build (largest:
+`fntrace.c` 144 MB, `sio.c` 102 MB, `debug_server.c` 101 MB,
+`audio_trace.c` 80 MB, `parity_trace.c` 50 MB, `overlay_loader.c` 48 MB).
+Next step: one build-level capacity setting for those rings, so a
+memory-limited host sizes them down or leaves them out.
+
 ## 60 fps
 
 THPS2 simulates at ~30 fps on PS1. Two separate goals:
