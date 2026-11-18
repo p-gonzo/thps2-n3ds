@@ -153,7 +153,10 @@ later launches skip it.
 prints the program's output as it runs, and returns as soon as it exits.
 Azahar needs, in its `qt-config.ini`: `instant_debug_log=true` and
 `log_filter=*:Info Debug.Emulated:Debug` (the 3DS build routes stdout and
-stderr to the debug log). An empty file named `wait-for-debugger` in
+stderr to the debug log), and `cpu_clock_percentage=300`. Azahar ignores the
+New 3DS's 804 MHz request (`ConfigureNew3DSCPU` is unimplemented) and times
+the CPU at the original 3DS's 268 MHz even in New 3DS mode; 300% matches the
+New 3DS clock. It does not model the New 3DS's L2 cache. An empty file named `wait-for-debugger` in
 `3ds/thps2/` holds the program for 15 s at start so GDB
 (`arm-none-eabi-gdb` against `build-3ds/*.elf`, Azahar's GDB stub) can
 attach.

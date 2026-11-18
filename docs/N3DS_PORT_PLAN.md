@@ -150,14 +150,26 @@ out of the 3DS hot path, then the renderer.
 
 ## Speed phase (started 2026-11-18)
 
-Baseline in Azahar (New 3DS, `PSX_FPS_TELEMETRY=1` via `psx-env.txt`):
-BIOS start 5.4 fps (0.09x), Sony logo 1.9-2.1 fps (0.03x).
+Baseline in Azahar (`PSX_FPS_TELEMETRY=1` via `psx-env.txt`). **Azahar's
+New 3DS mode does not raise the CPU clock:** it ignores `ConfigureNew3DSCPU`
+(804 MHz + L2) and times the CPU at 268 MHz unless `cpu_clock_percentage` is
+raised. Measured with the same build:
+
+| Scene | 100% (268 MHz, Old 3DS budget) | 300% (804 MHz, New 3DS) |
+|---|---|---|
+| BIOS start | 5.4 fps | 16.2 fps |
+| Sony logo | 2.0 fps | 6.0 fps |
+
+All measurements from here on use 300%. The gap to 60 fps on the logo is
+about 10x, not 30x. Azahar does not model the L2 cache; hardware numbers may
+differ either way.
 
 **Mac proxy.** `tools/mac_proxy_bench.py` runs a Mac build with the 3DS's
 diagnostic settings (`build-mac3ds`), software renderer at native resolution,
 turbo on, and reports guest fps over fixed frame ranges. Sony logo (frames
-120-200): **162-167 fps on an M3 Pro vs 2.0 on the 3DS, about 80x.** So for
-60 fps on the 3DS the runtime's cost per frame must drop roughly 30x. This is
+120-200): **162-167 fps on an M3 Pro vs 6.0 on the 3DS at 804 MHz, about
+27x** (80x against the 268 MHz numbers). So for 60 fps on the 3DS the
+runtime's cost per frame must drop roughly 10x. This is
 a lean runtime profile for constrained hosts, not tuning. Each change is
 measured on the proxy (seconds) and confirmed in Azahar.
 
