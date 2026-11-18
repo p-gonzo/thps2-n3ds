@@ -20,10 +20,11 @@ PlayStation BIOS dump.
 |---|---|
 | macOS build plays through menus into a level at full speed | **done** |
 | 3DS toolchain set up; feasibility check of the code on ARM | **done**: 278 of 290 source files compile unchanged |
-| 3DS build compiles and links | **done**; does not fit in memory yet (see plan) |
-| 3DS build boots the PlayStation BIOS | next |
-| In-game on 3DS (disc reads from SD, input, menus) | planned |
-| Audio, full speed, citro3d GPU renderer | planned |
+| 3DS build compiles, links and fits in New 3DS memory | **done** |
+| 3DS build boots the PlayStation BIOS (Sony logo) and reaches the game's code (Activision logo) | **done** in Azahar, at about 2 fps; not yet tried on hardware |
+| Speed: full speed on New 3DS | **next** |
+| In-game on 3DS (menus, input, gameplay) | planned |
+| Audio, citro3d GPU renderer | planned |
 | Widescreen, stereoscopic 3D, bottom-screen UI, 60 fps | planned |
 | CIA packaging | planned |
 
@@ -119,6 +120,43 @@ It boots the game in a hidden window, presses through the menus into The
 Hangar, and saves timed screenshots to `out/captures/smoke/`. It prints the
 game's frame number at each shot; about 60 per second means full speed.
 `tools/psx_debug.py` sends single commands to a running game.
+
+## Building for New 3DS
+
+Needs devkitPro with `3ds-dev` and `3ds-zlib`, and `generated/` from the macOS
+steps above (code generation always runs on a PC).
+
+```bash
+cmake -S . -B build-3ds -G Ninja -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/3DS.cmake -DCMAKE_BUILD_TYPE=Release
+```
+
+```bash
+ninja -C build-3ds thps2.3dsx
+```
+
+The 3DS build turns off the desktop launcher, Vulkan, netplay, rewind and the
+debug server on its own. Stage it with your BIOS and disc onto an SD-card
+root (the emulator's or your card's):
+
+```bash
+python3 tools/n3ds_stage_sd.py --sd "$HOME/Library/Application Support/Azahar/sdmc"
+```
+
+That writes `3ds/thps2/` with the `.3dsx`, `game.toml`, `bios/`, `disc/` and a
+`bios.cfg` naming the BIOS. The first launch hashes the whole disc image once
+(about 5 minutes on 3DS hardware speed) and caches the result next to it;
+later launches skip it.
+
+### Testing in Azahar
+
+`tools/azahar_run.py` closes any running Azahar, starts the staged game,
+prints the program's output as it runs, and returns as soon as it exits.
+Azahar needs, in its `qt-config.ini`: `instant_debug_log=true` and
+`log_filter=*:Info Debug.Emulated:Debug` (the 3DS build routes stdout and
+stderr to the debug log). An empty file named `wait-for-debugger` in
+`3ds/thps2/` holds the program for 15 s at start so GDB
+(`arm-none-eabi-gdb` against `build-3ds/*.elf`, Azahar's GDB stub) can
+attach.
 
 ## Repository layout
 

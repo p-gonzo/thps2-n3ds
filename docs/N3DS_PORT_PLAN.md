@@ -117,6 +117,37 @@ of it is diagnostic recording rings compiled into every build (largest:
 Next step: one build-level capacity setting for those rings, so a
 memory-limited host sizes them down or leaves them out.
 
+## Milestone 1 reached (2026-11-18)
+
+In Azahar 2126.2 (New 3DS mode) the 3DS build boots the recompiled SCPH-1001
+BIOS to the Sony logo and hands over to THPS2's own code (Activision logo), at
+about 2 fps. psxrecomp `n3ds` `3cfb220`.
+
+What it took, in order of discovery:
+
+| Problem | Fix |
+|---|---|
+| 741 MB `.bss`, ~700 MB heap rings | `PSX_DIAG_CAP` on 51 diagnostic sizes (shift 6 on 3DS); DLL-only overlay tables minimal on 3DS. Static total now ~97 MB |
+| libctru's default 32 MB linear heap left no normal heap, so it died before `main` | `__ctru_linear_heap_size` = 8 MB (`platform/n3ds/n3ds_platform.c`) |
+| Every C++ throw ended in `std::terminate` | devkitARM `3dsx.ld` sets `__exidx_start` before the section's alignment padding; `__gnu_Unwind_Find_exidx` returns the aligned table |
+| `sdmc:/...` is "relative" to libstdc++ (canonical, absolute, doubled paths) | `host_path.h` treats `name:/` as absolute; `psx_path_canonical.h` |
+| Full-disc SHA-256 on every launch (~285 s) | per-image digest cache (`PSX_DISC_DIGEST_CACHE`) |
+| `temp_directory_path` throws (no temp dir) | cache root in the data folder |
+| No BIOS picker | staged `bios.cfg`, the launcher's own remembered-pick file |
+| SDL's 3DS driver refuses a GL window | window falls back to the software renderer |
+
+Report upstream: the `3dsx.ld` exidx bug to devkitPro; the PSX_RECOMP_UI=OFF
+compile fix, GL-through-SDL loader and host_path device roots to
+RetroPortingToolKit.
+
+**Where the time goes** (15 GDB stack samples during the BIOS intro): about a
+third in one BIOS routine (`SCPH1001_func_1FC41DC8`) and the interrupt checks
+around it, which looks like the BIOS busy-waiting for vblank (`idle_skip` is
+disabled); then the software rasterizer (Gouraud triangles), the per-pixel
+display conversion, and `fntrace_record`, which runs on every dispatched call.
+Next: measure on hardware-like settings, idle skip, take the always-on tracing
+out of the 3DS hot path, then the renderer.
+
 ## 60 fps
 
 THPS2 simulates at ~30 fps on PS1. Two separate goals:
