@@ -130,7 +130,8 @@ game's frame number at each shot; about 60 per second means full speed.
 | `docs/N3DS_PORT_PLAN.md` | The port plan. |
 | `generated/`, `disc/`, `build-*/`, `out/` | Build output and extracted data. Gitignored; never commit them. |
 
-Branches: `main` mirrors upstream; port work lands on `n3ds`.
+Branches: port work lands on `main`. Alexbeav's desktop repository is the
+`upstream` remote, for pulling title updates (`git fetch upstream`).
 
 To pull framework updates, from inside `psxrecomp/`:
 
