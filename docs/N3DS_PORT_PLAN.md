@@ -148,6 +148,40 @@ display conversion, and `fntrace_record`, which runs on every dispatched call.
 Next: measure on hardware-like settings, idle skip, take the always-on tracing
 out of the 3DS hot path, then the renderer.
 
+## Speed phase (started 2026-11-18)
+
+Baseline in Azahar (New 3DS, `PSX_FPS_TELEMETRY=1` via `psx-env.txt`):
+BIOS start 5.4 fps (0.09x), Sony logo 1.9-2.1 fps (0.03x).
+
+**Mac proxy.** `tools/mac_proxy_bench.py` runs a Mac build with the 3DS's
+diagnostic settings (`build-mac3ds`), software renderer at native resolution,
+turbo on, and reports guest fps over fixed frame ranges. Sony logo (frames
+120-200): **162-167 fps on an M3 Pro vs 2.0 on the 3DS, about 80x.** So for
+60 fps on the 3DS the runtime's cost per frame must drop roughly 30x. This is
+a lean runtime profile for constrained hosts, not tuning. Each change is
+measured on the proxy (seconds) and confirmed in Azahar.
+
+Done so far:
+- Direct presenter (`host_present.h` hook in psxrecomp, `n3ds_present_top`
+  in `platform/n3ds`): the frame goes to the top-screen framebuffer in one
+  rotated pass instead of three SDL CPU passes. Removed SDL's blitters from
+  the profile; logo 1.9 -> 2.1 fps. Presentation was never the main cost.
+
+Where the time goes (Mac `sample`, emulation thread, logo/boot frames; guest
+game code itself is a small minority):
+
+| Cost | Notes |
+|---|---|
+| Static-code validity check on every dispatch (`dirty_ram_text_native_ok_ranges_from` + `memcmp`, ~15%) | THPS2's code and variables share 4 KB pages, so data writes flag code pages and every dispatch re-compares its function's bytes. Fix: track writes at code-byte precision (a write outside every static range cannot invalidate one); every RAM writer (CPU, DMA, loaders, savestates, mods) must take part |
+| Interrupt checks (`psx_check_interrupts*`, ~13%) | per dispatch / per block |
+| Dirty-RAM bookkeeping on dispatch and writes | `dirty_ram_dispatch`, `dirty_ram_is_dirty` |
+| Always-on per-write and per-call diagnostics | `debug_server_trace_write_check`, `debug_server_log_call_entry`, `xprobe_event`, `fntrace_record`, `mod_runtime_on_dispatch`, `text_xlate_on_dispatch`, `overlay_watch_note_write`, `history_record_live_write`; candidates for a compile-time "constrained host" profile |
+| SPU catch-up, MDEC, display conversion (`gpu_display_pixel_*` per pixel) | |
+
+Also open: `-O3`/LTO for the generated code on ARM11, and whether Azahar's CPU
+timing matches the console (CTR-3D: "a change that only ran in the emulator
+is unproven").
+
 ## 60 fps
 
 THPS2 simulates at ~30 fps on PS1. Two separate goals:

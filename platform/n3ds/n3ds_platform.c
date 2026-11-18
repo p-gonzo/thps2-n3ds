@@ -28,8 +28,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <unwind.h>   /* _Unwind_Ptr */
+
+#include "host_present.h"   /* psxrecomp: psx_host_present_register */
 
 #ifndef THPS2_N3DS_DATA_DIR
 #define THPS2_N3DS_DATA_DIR "sdmc:/3ds/thps2"
@@ -71,6 +74,48 @@ _Unwind_Ptr __gnu_Unwind_Find_exidx(_Unwind_Ptr pc, int *nrec)
  * (about 1.3 MB for both screens) and audio. The rest becomes the normal heap. */
 u32 __ctru_linear_heap_size = 8u * 1024u * 1024u;
 
+/* Frame presenter (psxrecomp host_present.h). The runtime's software path
+ * would otherwise go through SDL's software renderer: a texture upload, a
+ * scaled copy onto a 640x480 logical canvas, then SDL's 3DS driver copying
+ * the window surface into the framebuffer again - three full-frame CPU passes
+ * through generic per-pixel blitters. This writes the finished frame straight
+ * into the top-screen framebuffer in one pass.
+ *
+ * The top screen is 400x240, stored rotated: screen pixel (x, y) is at
+ * fb[x * 240 + (239 - y)]. A 4:3 PS1 frame fills a centred 320x240 area, so
+ * the common 320x240 mode copies 1:1; other modes (256/368/512/640 wide,
+ * 480i) are sampled nearest-neighbour into it. Only the RGBA8 format SDL
+ * sets up is handled; anything else declines and SDL presents as before. */
+static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int pin_43)
+{
+    (void)pin_43;   /* no widescreen yet: every frame is shown 4:3 */
+    if (!argb || w <= 0 || h <= 0 || pitch < w) return 0;
+    if (gfxGetScreenFormat(GFX_TOP) != GSP_RGBA8_OES) return 0;
+    u16 rows = 0, cols = 0;   /* 240 x 400: the framebuffer is rotated */
+    u32 *fb = (u32 *)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, &rows, &cols);
+    if (!fb || rows != 240 || cols < 320) return 0;
+
+    enum { OUT_W = 320, OUT_H = 240 };
+    const int x0 = (cols - OUT_W) / 2;
+    static int src_row[OUT_H], src_row_h = -1;
+    if (src_row_h != h) {
+        for (int y = 0; y < OUT_H; y++) src_row[y] = (y * h) / OUT_H;
+        src_row_h = h;
+    }
+    memset(fb, 0, (size_t)x0 * rows * 4u);
+    memset(fb + (size_t)(x0 + OUT_W) * rows, 0, (size_t)(cols - x0 - OUT_W) * rows * 4u);
+    for (int x = 0; x < OUT_W; x++) {
+        const uint32_t *src = argb + (x * w) / OUT_W;
+        u32 *dst = fb + (size_t)(x0 + x) * rows + (rows - 1);
+        for (int y = 0; y < OUT_H; y++)
+            dst[-y] = (src[(size_t)src_row[y] * (size_t)pitch] << 8) | 0xFFu;  /* ARGB -> RGBA */
+    }
+    GSPGPU_FlushDataCache(fb, (u32)rows * cols * 4u);
+    gfxScreenSwapBuffers(GFX_TOP, false);
+    gspWaitForVBlank();   /* the driver vsync the SDL path would have waited on */
+    return 1;
+}
+
 /* One line at process exit, so a run that ends without a message from the
  * runtime still shows that it ended normally rather than crashed. */
 static void thps2_n3ds_note_exit(void)
@@ -92,9 +137,30 @@ static void thps2_n3ds_process_setup(void)
     svcOutputDebugString(hello, sizeof(hello) - 1);
     printf("thps2-n3ds: stdout reaches the debug log\n");
     atexit(thps2_n3ds_note_exit);
+    psx_host_present_register(n3ds_present_top);
     /* If the folder is missing, the runtime reports the missing game.toml /
      * BIOS / disc on its own; nothing to add here. */
     (void)chdir(THPS2_N3DS_DATA_DIR);
+
+    /* Opt-in: psx-env.txt in the data folder sets environment variables, one
+     * KEY=VALUE per line ('#' starts a comment). A 3DS app has no shell, and
+     * the runtime's PSX_* switches (PSX_FPS_TELEMETRY=1, ...) are read from
+     * the environment, as on a PC. */
+    FILE *env = fopen("psx-env.txt", "r");
+    if (env) {
+        char line[256];
+        while (fgets(line, sizeof line, env)) {
+            char *end = line + strlen(line);
+            while (end > line && (end[-1] == '\n' || end[-1] == '\r' || end[-1] == ' '))
+                *--end = '\0';
+            char *eq = strchr(line, '=');
+            if (line[0] == '#' || !eq || eq == line) continue;
+            *eq = '\0';
+            setenv(line, eq + 1, 1);
+            printf("thps2-n3ds: env %s=%s\n", line, eq + 1);
+        }
+        fclose(env);
+    }
 
     /* Opt-in: an empty file named wait-for-debugger in the data folder holds
      * the process here for 15 s so a debugger (Azahar's GDB stub, or GDB over
