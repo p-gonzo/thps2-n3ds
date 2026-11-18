@@ -160,7 +160,10 @@ raised. Measured with the same build:
 | BIOS start | 5.4 fps | 16.2 fps |
 | Sony logo | 2.0 fps | 6.0 fps |
 
-All measurements from here on use 300%. The gap to 60 fps on the logo is
+All measurements from here on use 300%. `tools/azahar_run.py` reports three
+windows: BIOS start (frames 20-70), Sony logo (125-200) and game start
+(790-1000; the BIOS hands over to THPS2's code at frame 780). Changes to
+game-code paths only show in the last one. The gap to 60 fps on the logo is
 about 10x, not 30x. Azahar does not model the L2 cache; hardware numbers may
 differ either way.
 
@@ -202,7 +205,7 @@ game code itself is a small minority):
 
 | Cost | Notes |
 |---|---|
-| Static-code validity check on every dispatch (`dirty_ram_text_native_ok_ranges_from` + `memcmp`, ~15%) | THPS2's code and variables share 4 KB pages, so data writes flag code pages and every dispatch re-compares its function's bytes. Fix: track writes at code-byte precision (a write outside every static range cannot invalidate one); every RAM writer (CPU, DMA, loaders, savestates, mods) must take part |
+| ~~Static-code validity check on every dispatch~~ **done** | THPS2's code and variables share 4 KB pages, so data writes flagged code pages and every dispatch re-compared its function's bytes. Now a word-precise "equal to the reference" bitmap (`memory.c`, `text_equal_*`) settles it on pages that only CPU stores touched. **Game start (frames 790-1000): 6.3 -> 9.6 fps (+52%)** in Azahar; BIOS phases unchanged (the check guards game code). `PSX_TEXT_EQUAL_BITS=0` turns it off for A/B. On the Mac it barely registered (`memcmp` is cheap on an M3) |
 | Interrupt checks (`psx_check_interrupts*`, ~13%) | per dispatch / per block |
 | Dirty-RAM bookkeeping on dispatch and writes | `dirty_ram_dispatch`, `dirty_ram_is_dirty` |
 | Always-on per-write and per-call diagnostics | `debug_server_trace_write_check`, `debug_server_log_call_entry`, `xprobe_event`, `fntrace_record`, `mod_runtime_on_dispatch`, `text_xlate_on_dispatch`, `overlay_watch_note_write`, `history_record_live_write`; candidates for a compile-time "constrained host" profile |
