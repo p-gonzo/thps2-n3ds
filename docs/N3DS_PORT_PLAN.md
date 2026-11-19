@@ -431,6 +431,17 @@ SDL's audio thread runs on core 1 (APT_SetAppCpuTimeLimit(30)) and spends its
 time resampling (`rab_pull`, 64-bit divisions); it shares a lock with the main
 thread. Also to look at.
 
+## Hardware gameplay baseline (log.txt, build 05a1b7d, full scripted run)
+
+BIOS start 12.9, Sony logo 4.2, game start 7.2, intro 3.8, menus 4.0,
+gameplay 5.2 fps (frames 9000-13500; 0.09x). Snapshot at frame 7100 is
+pixel-identical to Azahar's. The exit report shows 384 M guest instructions
+interpreted after game entry: level code THPS2 loads above its executable
+(0x10E000-0x1F5000), which no static compile covers (a static overlay shard
+could; small share of the frame).
+
+Next: the PICA200 renderer, designed in `N3DS_GPU_RENDERER.md`.
+
 ## Roadmap: disc image format and disc-read cost
 
 Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
