@@ -68,7 +68,9 @@ if(NINTENDO_3DS)
     # runs from here exactly as the desktop build runs from build-release/.
     set(THPS2_N3DS_DATA_DIR "sdmc:/3ds/thps2" CACHE STRING "SD-card data folder")
     target_sources(psx-runtime PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_platform.c")
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_platform.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_hud.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_fatal.cpp")
     target_compile_definitions(psx-runtime PRIVATE
         THPS2_N3DS_DATA_DIR="${THPS2_N3DS_DATA_DIR}")
     # Scripted input (input-script.txt, platform/n3ds/n3ds_platform.c) is

@@ -33,6 +33,7 @@
 #include <unwind.h>   /* _Unwind_Ptr */
 
 #include "host_present.h"   /* psxrecomp: psx_host_present_register */
+#include "n3ds_hud.h"
 
 #ifndef THPS2_N3DS_DATA_DIR
 #define THPS2_N3DS_DATA_DIR "sdmc:/3ds/thps2"
@@ -115,6 +116,8 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
     }
     GSPGPU_FlushDataCache(fb, (u32)rows * cols * 4u);
     gfxScreenSwapBuffers(GFX_TOP, false);
+    g_n3ds_gfx_ready = 1;
+    n3ds_hud_tick();      /* bottom-screen counter, redrawn once a second */
     gspWaitForVBlank();   /* the driver vsync the SDL path would have waited on */
     return 1;
 }

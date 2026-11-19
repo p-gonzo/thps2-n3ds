@@ -147,6 +147,14 @@ That writes `3ds/thps2/` with the `.3dsx`, `game.toml`, `bios/`, `disc/` and a
 (about 5 minutes on 3DS hardware speed) and caches the result next to it;
 later launches skip it.
 
+### On-screen status and errors
+
+The bottom screen shows the game's frame rate, its speed relative to a PS1,
+the guest frame number and heap use, updated once a second. If the game stops
+on an error (for example running out of memory), the bottom screen says so and
+waits for START instead of closing silently. An empty file named `test-fatal`
+in `3ds/thps2/` triggers that screen at start-up, to check it.
+
 ### Testing in Azahar
 
 `tools/azahar_run.py` closes any running Azahar, starts the staged game,
