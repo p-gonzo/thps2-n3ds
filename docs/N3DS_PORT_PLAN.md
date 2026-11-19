@@ -363,6 +363,29 @@ service and memory mapping in its `.rsf` (e.g. DSP shared memory
 `1ff50000-1ff57fff`, `1ff70000-1ff77fff`, `1f000000-1f5fffff:r`; see
 https://ankush.one/blogs/nintendo-3ds-homebrew/).
 
+## Hardware measurements (New 3DS, Luma3DS HBL, build 6ddfa6b)
+
+Speed mode active (loop ratio 3.03). Heap 34/60 MB. No errors.
+
+| Phase (frames) | New 3DS | Azahar (300%) | Ratio |
+|---|---|---|---|
+| BIOS start (20-70) | 13.0 | 38.9 | 0.33 |
+| Sony logo (125-200) | 3.8 | 7.5 | 0.51 |
+| Game start (790-1000) | 7.9 | 13.3 | 0.59 |
+| Intro (1000-1500) | 3.8 | ~8.4 | 0.45 |
+
+Azahar overstates hardware speed by about 2x, unevenly; hardware is the
+benchmark from here. Findings from log.txt and psx_last_run_report.json:
+- 32.5 M blocked static-code checks and 10.4 M byte mismatches by frame 1574
+  (the Mac reaches the same totals and stops): the BIOS shell runs from its
+  RAM copy at 0x30000-0x5AFFF, the same addresses as THPS2's static code, so
+  every shell call fails the game-code check. A negative verdict cache would
+  remove it (boot/logo only).
+- The overlay capture store writes overlay_captures.json to the SD card
+  during play (and its replace fails on FAT, errno 2). Useless on a 3DS (no
+  compiler); turn it off.
+- Next tool: Rosalina's GDB stub over Wi-Fi for profiles on hardware.
+
 ## Roadmap: disc image format and disc-read cost
 
 Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
