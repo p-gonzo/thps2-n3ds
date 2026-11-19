@@ -1,6 +1,6 @@
 # PICA200 renderer for the THPS2 3DS port: design
 
-Status: Phases 1-2 done; Phase 3 done in Azahar, hardware check pending (2026-11-19). Phase 0 showed the design holds for THPS2 ("Phase 0 results").
+Status: Phases 1-3 done (2026-11-19). On the New 3DS, gameplay 5.2 -> 7.7 fps with THPS2_GPU=1; Phase 4 next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
 
 **Aspect ratio rule:** the PS1 picture is always shown at 4:3, 320x240
 centred on the 400x240 top screen with black bars. Nothing is ever stretched
@@ -207,6 +207,13 @@ plus hardware fps.
   presenters (C3D_FRAME_SYNCDRAW / gspWaitForVBlank always waited at least one
   vblank; the runtime's wall-clock cap still limits to 60), software 10.37,
   **GPU 17.01 (+64%)**.
+- **Hardware (New 3DS, 2026-11-19, Hangar state, `THPS2_GPU=1`): gameplay
+  median 7.71 fps vs the 5.20 software baseline (+48%).** GPU time 1.4-1.5 ms
+  per frame, 945-1060 batches per second, texture cache 1.9 MB with no
+  decodes in steady state, every frame presented from the GPU. The
+  `screen_600.bmp` capture matches Azahar's except 1-step rounding on a third
+  of the pixels (real PICA200 vs Azahar's emulation of it), 4:3 in columns
+  40-359. The raw-copy snapshot readback works on hardware (no freeze).
 - Known gaps (Phase 4): copies out of GPU-owned buffers read stale CPU VRAM
   (THPS2's two menu frame grabs); lines are software-only.
 
