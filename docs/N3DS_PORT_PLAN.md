@@ -392,6 +392,29 @@ benchmark from here. Findings from log.txt and psx_last_run_report.json:
   process each sample). Rosalina menu -> Debugger options -> Enable
   debugger.
 
+## First hardware profile (Rosalina GDB, 60 samples, build 05a1b7d)
+
+`tools/azahar_profile.py --host <IP>` works (run outside the command
+sandbox: macOS Local Network privacy blocks LAN TCP from it). Samples land on
+whichever thread GDB stops: 34 main thread, 17 SDL audio thread, 9 other.
+
+Main thread: dispatch + code validity 26%, of which the generated
+`psx_dispatch_impl` itself 18%; GPU raster/display 18%; interrupts + timing
+12%; game code 9%; store bookkeeping 6%; CD/MDEC/DMA 6%.
+
+Why dispatch costs so much on hardware: in the generated dispatcher every call
+into game code first does a failed binary search of the BIOS table (13,012
+entries, 14 probes over ~100 KB), then falls through to the game lookup. Cheap
+on an M3, cache misses on the ARM11. `PSX_NATIVE_STATIC_CALLS` checks game
+text first and keeps frames pixel-identical, but is slower now in Azahar (game
+start 13.2 vs 17.8 fps; its own validity path bypasses the verdict cache), so
+it stays off. Next: change the recompiler's emitted dispatcher (game-text
+addresses skip the BIOS search; a small lookup cache), regenerate, verify.
+
+SDL's audio thread runs on core 1 (APT_SetAppCpuTimeLimit(30)) and spends its
+time resampling (`rab_pull`, 64-bit divisions); it shares a lock with the main
+thread. Also to look at.
+
 ## Roadmap: disc image format and disc-read cost
 
 Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
