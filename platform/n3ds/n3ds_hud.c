@@ -151,7 +151,7 @@ void n3ds_hud_tick(void)
     if (!fb) return;
     for (int i = 0; i < 320 * 240; i++) fb[i] = BG;
     char line[48];
-    draw_text(fb, 12, 12, 2, GREY, "THPS2 FOR NEW 3DS - TEST BUILD");
+    draw_text(fb, 12, 12, 2, GREY, "THPS2 NEW 3DS TEST BUILD");   /* 25 chars fit at scale 2 */
     snprintf(line, sizeof line, "%.1f FPS", fps);
     draw_text(fb, 12, 50, 5, YELLOW, line);
     snprintf(line, sizeof line, "%.2fX PS1 SPEED", fps / 59.94);
@@ -161,8 +161,8 @@ void n3ds_hud_tick(void)
     snprintf(line, sizeof line, "HEAP %lu/%lu MB", (unsigned long)(n3ds_heap_used() >> 20),
              (unsigned long)(envGetHeapSize() >> 20));
     draw_text(fb, 12, 180, 3, WHITE, line);
-    snprintf(line, sizeof line, "CPU %s (X%.1f)%s", s_cpu_ratio > 2.5 ? "804 MHZ" : "268 MHZ",
-             s_cpu_ratio, g_n3ds_log ? "   LOG ON" : "");
+    snprintf(line, sizeof line, "CPU %s X%.1f%s", s_cpu_ratio > 2.5 ? "804MHZ" : "268MHZ",
+             s_cpu_ratio, g_n3ds_log ? "  LOG ON" : "");
     draw_text(fb, 12, 214, 2, s_cpu_ratio > 2.5 ? GREY : YELLOW, line);
     if (g_n3ds_log) {
         printf("thps2-n3ds: status fps=%.2f frame=%lu heap=%lu/%lu MB\n", fps,
