@@ -20,6 +20,10 @@ if(NINTENDO_3DS)
     foreach(_psx_off PSX_RECOMP_UI PSX_ENABLE_VULKAN PSX_NETPLAY PSX_REWIND PSX_DEBUG_TOOLS)
         set(${_psx_off} OFF CACHE BOOL "Off on Nintendo 3DS" FORCE)
     endforeach()
+    # Constrained-host profile: compile out the per-store/per-dispatch
+    # diagnostic hooks nothing on the console can read (no debug server).
+    # Azahar, 804 MHz: BIOS start 17.3 -> 38.3 fps, Sony logo 6.6 -> 7.0.
+    set(PSX_LEAN_HOST ON CACHE BOOL "Lean runtime profile on Nintendo 3DS" FORCE)
     set(_psx_title_surfaces "")
     # Release optimisation for the 3DS (ARM11, ARM mode). Measured in Azahar at
     # 804 MHz, Sony logo: -O2 6.0 fps, -O3 6.6, -Os 5.0; see docs/N3DS_PORT_PLAN.md.

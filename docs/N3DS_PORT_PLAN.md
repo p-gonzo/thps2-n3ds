@@ -215,6 +215,44 @@ Also open: `-O3`/LTO for the generated code on ARM11, and whether Azahar's CPU
 timing matches the console (CTR-3D: "a change that only ran in the emulator
 is unproven").
 
+## Ceiling test (2026-11-18)
+
+Question: can a lean runtime profile alone close the gap? Method: a Mac proxy
+built like the 3DS (`build-maclean`: debug tools, launcher, netplay, rewind
+off), run headless and unpaced (`PSX_UNPACED=1`; the Mac's SDL present is
+vsync-bound and is not the 3DS's presenter), timed with the runtime's own
+`PSX_BENCH_WINDOW`; then every changed step confirmed in Azahar.
+
+| Step | Mac logo | Mac game start | 3DS BIOS start | 3DS logo | 3DS game start |
+|---|---|---|---|---|---|
+| Before | 202 | 444 | 17.3 | 6.6 | 9.6 |
+| Verdict cache (code checks O(1) per call site; on everywhere) | 220 | 535 | 17.3 | 6.6 | 11.6 |
+| `PSX_LEAN_HOST` (diagnostic store/dispatch hooks out; 3DS default) | 222 | 535 | **38.3** | 7.0 | 11.9 |
+| `PSX_NATIVE_STATIC_CALLS` (not enabled: small, unverified) | 211 | 572 | 38.3 | 7.0 | 12.4 |
+
+Classifying every sample of the lean proxy (emulation thread):
+
+| | Logo | Game start |
+|---|---|---|
+| Guest code (game/BIOS compiled) | 11% | 16% |
+| GPU raster, SPU, MDEC/CD/DMA | 12% | 13% |
+| Interrupts + timing | 19% | 20% |
+| Dispatch + code validity | 40% | 29% |
+| Store bookkeeping | 7% | 10% |
+| Other / unclassified | 12% | 11% |
+
+**Answer:** with all runtime overhead gone the ceiling is ~3.0x (logo) and
+~2.6x (game start); halving it gives ~1.5x. A lean profile alone does not
+reach 60 fps, and reaches ~30 at game start only at its theoretical limit.
+The remaining overhead is structural: interrupt checks at every block edge
+and the per-call dispatch path (BIOS phases run kernel code from RAM-copied,
+runtime-dirty pages, so they keep the full checks). The 3DS also paid far more
+for the diagnostic store hooks than the proxy showed (BIOS start 2.2x on the
+3DS vs +10% on the Mac).
+
+Next: a gameplay baseline (scripted input to The Hangar) - the 3DS build has
+no debug server, so input needs a platform-side script.
+
 ## 60 fps
 
 THPS2 simulates at ~30 fps on PS1. Two separate goals:
