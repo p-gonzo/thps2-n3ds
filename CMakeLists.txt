@@ -28,6 +28,10 @@ if(NINTENDO_3DS)
     # due; only slow edges call the full interrupt check (2,232 instructions,
     # 23% of 3DS gameplay). Gameplay frames are pixel-identical with it off.
     set(PSX_OBSERVATION_TIME ON CACHE BOOL "Inline block-edge policy on Nintendo 3DS" FORCE)
+    # Lean execution profile, stage 1 (docs/N3DS_PORT_PLAN.md): generated
+    # stores write guest RAM inline, and the per-frame cost counters are off.
+    set(PSX_DIRECT_GUEST_MEMORY ON CACHE BOOL "Inline guest stores on Nintendo 3DS" FORCE)
+    set(PSX_HEADROOM_COUNTERS OFF CACHE BOOL "No cost counters on Nintendo 3DS" FORCE)
     set(_psx_title_surfaces "")
     # Release optimisation for the 3DS (ARM11, ARM mode). Measured in Azahar at
     # 804 MHz, Sony logo: -O2 6.0 fps, -O3 6.6, -Os 5.0; see docs/N3DS_PORT_PLAN.md.

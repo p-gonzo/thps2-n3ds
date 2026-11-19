@@ -97,6 +97,12 @@ def main():
     for l in lines:
         if any(k in l for k in ("FAILED", "GPU ", "shadow renderer", "texcache", "error", "Error")):
             print("  " + l)
+    # Speed: the HUD's status lines count guest frames per *emulated* second,
+    # so they are valid unthrottled too. Skip the first 15 (load, warm-up).
+    import re, statistics
+    fps = [float(m.group(1)) for l in lines for m in [re.search(r"status fps=([0-9.]+)", l)] if m][15:]
+    if fps:
+        print(f"fps (emulated 3DS time): median {statistics.median(fps):.2f} over {len(fps)} s")
     worst = 0
     for f in sorted(glob.glob(os.path.join(out, "gpu_*.bmp")), key=lambda p: int(p.split("_")[-1][:-4])):
         frame = os.path.basename(f)[4:-4]
