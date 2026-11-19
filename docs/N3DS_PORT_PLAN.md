@@ -299,6 +299,52 @@ function guarantees (cycle-batch flush, periodic maintenance, netplay rules).
 After that, a PICA200 renderer is the other large lever (rasteriser + GTE
 ~30%).
 
+## Observation time (2026-11-18)
+
+psxrecomp already had the interrupt fast path: `PSX_OBSERVATION_TIME` keeps
+ordinary block edges in an inline policy and calls the full check only on
+slow edges. Generated code already carries its boundary marker. Now on for
+3DS builds. Its edge was `always_inline` into every block edge, which grew
+the code 22.6 -> 36.3 MB and ran the 3DS out of heap at startup; on
+`PSX_LEAN_HOST` the edge is one out-of-line call (`psx_block_edge_call`),
+code 23.0 MB.
+
+| Window (Azahar) | Before | Observation time |
+|---|---|---|
+| BIOS start | 38.3 | 38.8 |
+| Sony logo | 7.0 | 7.5 |
+| Game start | 11.9 | 14.8 |
+| Gameplay | 9.2 | 9.3 |
+
+Gameplay frames 7100/7350 pixel-identical with it off and on, on macOS and
+the 3DS. Gameplay barely moved: during play most edges are slow edges (a
+device deadline is due), which the next profile has to explain.
+
+Roadmap: an out-of-memory failure (`std::bad_alloc`) on the 3DS currently
+ends the process silently; report it on screen.
+
+## Roadmap: disc image format and disc-read cost
+
+Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
+slows the game.
+
+Known so far: the 3DS build does not read the CHD. `game.toml` names
+`disc/Tony Hawk's Pro Skater 2 (USA).cue`, which `psxrecomp_cli.py generate`
+extracted from the CHD as a raw MODE2/2352 `.bin`, and
+`tools/n3ds_stage_sd.py` copies only that `.bin`/`.cue` to the SD card. The
+macOS builds read the same `.bin`. In the gameplay profile, CD/DMA data work
+is about 1%.
+
+Still to measure:
+- Disc-read cost on real SD-card speeds: time spent in CD sector reads during
+  level loads and XA music/FMV streaming (Azahar's SD emulation is a host
+  file and much faster than a console's card).
+- Whether streaming reads stall the frame (CTR-3D needed a read cache and
+  prefetch for XA streams on hardware).
+- For completeness, a CHD-backed run on the Mac (the runtime can mount a CHD
+  through libchdr) to quantify decompression cost, should a CHD ever be used
+  directly.
+
 ## 60 fps
 
 THPS2 simulates at ~30 fps on PS1. Two separate goals:

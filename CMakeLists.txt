@@ -24,6 +24,10 @@ if(NINTENDO_3DS)
     # diagnostic hooks nothing on the console can read (no debug server).
     # Azahar, 804 MHz: BIOS start 17.3 -> 38.3 fps, Sony logo 6.6 -> 7.0.
     set(PSX_LEAN_HOST ON CACHE BOOL "Lean runtime profile on Nintendo 3DS" FORCE)
+    # Observation time: ordinary block edges decide inline whether anything is
+    # due; only slow edges call the full interrupt check (2,232 instructions,
+    # 23% of 3DS gameplay). Gameplay frames are pixel-identical with it off.
+    set(PSX_OBSERVATION_TIME ON CACHE BOOL "Inline block-edge policy on Nintendo 3DS" FORCE)
     set(_psx_title_surfaces "")
     # Release optimisation for the 3DS (ARM11, ARM mode). Measured in Azahar at
     # 804 MHz, Sony logo: -O2 6.0 fps, -O3 6.6, -Os 5.0; see docs/N3DS_PORT_PLAN.md.
