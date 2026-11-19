@@ -208,8 +208,12 @@ with the 3DS's execution identity: configure `build-dbg3ds` with
 state whenever that identity changes.
 
 `--unthrottled` lifts Azahar's speed limit for that run only and restores it
-afterwards. Speed numbers always come from full scripted runs at speed limit
-100% and clock 300%, which keep them comparable with the baselines.
+afterwards; the game then runs 2-4x faster in real time. The bottom-screen
+HUD and the log count PS1 frames per *emulated* 3DS second, so unthrottled
+they show the same ~9 fps while Azahar's own counter shows the real pace
+(~35). Speed numbers always come from full scripted runs at speed limit 100%
+and clock 300%, where both clocks agree and results stay comparable with the
+baselines.
 
 ## Repository layout
 
