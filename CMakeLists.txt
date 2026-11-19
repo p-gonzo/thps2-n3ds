@@ -53,6 +53,33 @@ set(PSXRECOMP_BIOS_STEM "SCPH1001" CACHE STRING "Accepted BIOS" FORCE)
 set(PSXRECOMP_BIOS_PROFILE "${PSXRECOMP_ROOT}/bios/SCPH1001.toml" CACHE FILEPATH "Accepted BIOS" FORCE)
 include("${PSXRECOMP_ROOT}/runtime/runtime.cmake")
 
+# Island execution profile (psxrecomp/tools/islands.py): game functions keep
+# MIPS registers in C locals and call each other directly instead of through
+# the dispatcher. The faithful generated sources stay as they are; the island
+# copies are written to the build directory at configure time and compiled
+# instead. On by default for the 3DS.
+if(NINTENDO_3DS)
+    set(_thps2_islands_default ON)
+else()
+    set(_thps2_islands_default OFF)
+endif()
+option(THPS2_ISLANDS "Compile game code in the island execution profile" ${_thps2_islands_default})
+set(_thps2_full_glob "generated/SLUS_010.66_full_*.c")
+if(THPS2_ISLANDS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generated/SLUS_010.66_decls.h")
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" "${PSXRECOMP_ROOT}/tools/islands.py"
+                --in "${CMAKE_CURRENT_SOURCE_DIR}/generated"
+                --out "${CMAKE_CURRENT_BINARY_DIR}/islands"
+                --decls "${CMAKE_CURRENT_SOURCE_DIR}/generated/SLUS_010.66_decls.h"
+        RESULT_VARIABLE _thps2_islands_rc)
+    if(NOT _thps2_islands_rc EQUAL 0)
+        message(FATAL_ERROR "islands.py failed")
+    endif()
+    set(_thps2_full_glob "${CMAKE_CURRENT_BINARY_DIR}/islands/SLUS_010.66_full_*.c")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${PSXRECOMP_ROOT}/tools/islands.py")
+endif()
+
 psxrecomp_add_game_runtime(psx-runtime
     # ENABLE_NETPLAY_IF_PRESENT
     # NETPLAY_LOBBY_URL "ws://netplay.retcomm.net:8765"
@@ -63,9 +90,12 @@ psxrecomp_add_game_runtime(psx-runtime
     MAX_PLAYERS 2
     # LAUNCHER_BOXART "${CMAKE_CURRENT_SOURCE_DIR}/launcher_assets/img/boxart.tga"
     GEN_MARKER "generated/SLUS_010.66_dispatch.c"
-    GEN_FULL_GLOB "generated/SLUS_010.66_full_*.c"
+    GEN_FULL_GLOB "${_thps2_full_glob}"
     CODEGEN_SETUP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/codegen_setup.c"
 )
+if(THPS2_ISLANDS)
+    target_include_directories(psx-runtime PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/generated")
+endif()
 
 if(NINTENDO_3DS)
     # Data folder on the SD card (game.toml, bios/, disc/, saves). The game
@@ -128,6 +158,7 @@ if(NINTENDO_3DS)
         separate_arguments(_thps2_gen_flags UNIX_COMMAND "${THPS2_N3DS_GENERATED_CFLAGS}")
         file(GLOB _thps2_gen_sources
             "${CMAKE_CURRENT_SOURCE_DIR}/generated/*.c"
+            "${CMAKE_CURRENT_BINARY_DIR}/islands/*.c"
             "${PSXRECOMP_ROOT}/generated/SCPH1001_*.c")
         set_source_files_properties(${_thps2_gen_sources}
             TARGET_DIRECTORY psx-runtime

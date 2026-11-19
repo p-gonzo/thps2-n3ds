@@ -478,10 +478,19 @@ stage's (header aside), and Azahar frames must match pixel for pixel.
 | baseline | GPU renderer | 17.01 |
 | 1 | `PSX_DIRECT_GUEST_MEMORY` on (inline stores), `PSX_HEADROOM_COUNTERS` off, per-access memory counters and inline write history compiled out on lean hosts | 18.39 |
 | 2 | Inline block-edge horizon: one 64-bit compare per edge, full edge only at the next deadline/sample or when something is pending (psxrecomp `g_psx_edge_horizon`) | 19.7 |
+| 3 | Islands (`THPS2_ISLANDS`, default on for 3DS): `psxrecomp/tools/islands.py` rewrites the generated game C at configure time. Guest registers live in C locals, `jal` targets are called directly, edges share one slow stub per function, RAM loads/charges are inline and stores have an out-of-line fast path while the horizon says nothing is pending | 22.66 |
 
-Both stages left the frame-7000 machine state byte-identical. The program
-image is checked at build time against a 60 MB budget
-(`cmake/n3ds_image_size.cmake`; 64 MB is Luma's hard limit): 56.7 MB.
+All stages left the machine state byte-identical (stage 3 checked at
+frames 974, 3000, 4000, 5000, 6600 and 7000). The program image is checked
+at build time against a 60 MB budget (`cmake/n3ds_image_size.cmake`; 64 MB
+is Luma's hard limit): 58.4 MB with islands. Inlining the store fast paths
+too cost 5 MB (63.3 MB), so they stay out of line.
+
+Verification tools: `tools/hangar_state.py`, `tools/fp_compare.py` (first
+diverging frame from per-frame fingerprints) and `tools/pst_diff.py`
+(section-level savestate diff). The scripted presses go through the
+runtime's frame-exact input route; host-timed presses landed on different
+frames under load and made identical builds look divergent.
 
 ## Roadmap: disc image format and disc-read cost
 

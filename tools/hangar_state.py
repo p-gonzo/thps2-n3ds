@@ -20,6 +20,27 @@ R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRESSES = [(1780, "START"), (2260, "START"), (2740, "START"), (3220, "CROSS"),
            (3820, "CROSS"), (4540, "CROSS"), (5260, "CROSS"), (6580, "CROSS")]
 MASK = {"START": 0xFFF7, "CROSS": 0xBFFF}
+HOLD = 9
+
+
+def start_route(d):
+    """Queue PRESSES as a frame-exact input route in the runtime.
+
+    Polling the frame counter from the host and pressing when it passes a
+    target slips by however far the game ran between polls, so two runs of
+    the same build could press on different frames."""
+    d("input_route_clear")
+    for i, (f, b) in enumerate(PRESSES):
+        d("input_route_append", frames=HOLD, buttons=MASK[b])
+        gap = (PRESSES[i + 1][0] - f - HOLD) if i + 1 < len(PRESSES) else 1
+        d("input_route_append", frames=gap, buttons=0xFFFF)
+    r = d("input_route_start", port=1, at_frame=PRESSES[0][0])
+    if not r.get("ok"):
+        sys.exit(f"input route refused: {r}")
+
+
+def route_done_frame():
+    return PRESSES[-1][0] + HOLD + 1
 
 
 def launch(exe, memcard, extra_env=None, log_name="run.log"):
@@ -72,13 +93,8 @@ def main():
 
     p, d = launch(exe, memcard)
     try:
-        presses, held = list(PRESSES), None
-        while True:
-            f = d("frame")["frame"]
-            if held and f >= held: d("clear_input"); held = None
-            if presses and f >= presses[0][0]:
-                _, b = presses.pop(0); d("set_input", buttons=MASK[b]); held = f + 9
-            if f >= a.frame and not held: break
+        start_route(d)
+        while d("frame")["frame"] < max(a.frame, route_done_frame()):
             time.sleep(0.005)
         r = d("savestate", op="save", slot=1)
         if not r.get("ok"): sys.exit(f"save refused: {r}")
