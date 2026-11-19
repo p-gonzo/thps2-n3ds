@@ -1,4 +1,4 @@
-"""Sampling profiler for the 3DS build running in Azahar.
+"""Sampling profiler for the 3DS build: in Azahar, or on a real console.
 
 Attaches arm-none-eabi-gdb to Azahar's GDB stub N times, records a backtrace
 each time, and reports where the program was: "self" = the innermost frame,
@@ -10,6 +10,17 @@ with use_gdbstub=true in Azahar's qt-config.ini.
 
     python3 tools/azahar_profile.py --samples 40
     python3 tools/azahar_profile.py --samples 60 --depth 12 --top 30
+
+On a New 3DS with Luma3DS: start the game from the Homebrew Launcher, open
+the Rosalina menu (L + Down + Select), Debugger options -> Enable debugger,
+note the console's IP address (Rosalina's main menu or System Settings), and:
+
+    python3 tools/azahar_profile.py --host 192.168.1.50 --samples 60 --classify
+
+That connects to Rosalina's GDB server (port 4000), finds the homebrew
+process (named 3dsx_app), and attaches for each sample. build-3ds/*.elf must
+be the build that is running on the console. Each sample pauses the game for
+a moment over Wi-Fi, so expect about one sample a second.
 """
 import argparse
 import collections
@@ -47,6 +58,26 @@ def category(fn):
     return "other: " + fn
 
 
+def find_console_pid(host, port):
+    """The PID of the homebrew process on a console running Rosalina's GDB
+    server: Luma's homebrew loader names it 3dsx_app."""
+    with tempfile.NamedTemporaryFile("w", suffix=".gdb", delete=False) as f:
+        f.write("set pagination off\nset confirm off\n"
+                f"target extended-remote {host}:{port}\ninfo os processes\ndisconnect\n")
+        name = f.name
+    try:
+        out = subprocess.run([GDB, "-q", "-batch", "-x", name], capture_output=True,
+                             text=True, timeout=60)
+    finally:
+        os.unlink(name)
+    for line in out.stdout.splitlines():
+        cols = line.split()
+        if len(cols) >= 2 and cols[0].isdigit() and "3dsx_app" in line:
+            return int(cols[0])
+    raise SystemExit("no 3dsx_app process found; is the game running and the Rosalina "
+                     "debugger enabled?\n" + out.stdout[-1500:] + out.stderr[-800:])
+
+
 def sample(cmdfile):
     out = subprocess.run([GDB, "-q", "-batch", "-x", cmdfile, ELF],
                          capture_output=True, text=True, timeout=60).stdout
@@ -63,16 +94,29 @@ def main():
     ap.add_argument("--samples", type=int, default=40)
     ap.add_argument("--depth", type=int, default=10)
     ap.add_argument("--top", type=int, default=20)
-    ap.add_argument("--port", type=int, default=24689)
+    ap.add_argument("--port", type=int, default=None,
+                    help="GDB port (default: 24689 for Azahar, 4000 with --host)")
+    ap.add_argument("--host", default=None,
+                    help="a console's IP: use Rosalina's GDB server instead of Azahar's stub")
+    ap.add_argument("--pid", type=int, default=None,
+                    help="process to attach to on the console (default: find 3dsx_app)")
     ap.add_argument("--gap", type=float, default=0.5, help="seconds between samples")
     ap.add_argument("--raw", help="also write every sampled stack here (one per block)")
     ap.add_argument("--classify", action="store_true",
                     help="group innermost frames into runtime cost categories")
     a = ap.parse_args()
 
+    if a.host:
+        port = a.port or 4000
+        pid = a.pid or find_console_pid(a.host, port)
+        target = (f"target extended-remote {a.host}:{port}\n"
+                  f"attach {pid}\n")
+        print(f"console {a.host}:{port}, process {pid}")
+    else:
+        target = f"target remote 127.0.0.1:{a.port or 24689}\n"
     with tempfile.NamedTemporaryFile("w", suffix=".gdb", delete=False) as f:
-        f.write("set pagination off\nset confirm off\n"
-                f"target remote 127.0.0.1:{a.port}\nbt {a.depth}\ndetach\n")
+        f.write("set pagination off\nset confirm off\n" + target +
+                f"bt {a.depth}\ndetach\n")
         cmdfile = f.name
     self_c, incl_c, n = collections.Counter(), collections.Counter(), 0
     raw = open(a.raw, "w") if a.raw else None

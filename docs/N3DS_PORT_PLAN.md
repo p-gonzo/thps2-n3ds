@@ -384,7 +384,13 @@ benchmark from here. Findings from log.txt and psx_last_run_report.json:
 - The overlay capture store writes overlay_captures.json to the SD card
   during play (and its replace fails on FAT, errno 2). Useless on a 3DS (no
   compiler); turn it off.
-- Next tool: Rosalina's GDB stub over Wi-Fi for profiles on hardware.
+- Fixed (psxrecomp 7a3423b): failed checks are cached too (byte mismatches
+  10.4 M -> 162; Azahar game start 13.3 -> 17.8 fps) and the capture store
+  is off on the 3DS.
+- Hardware profiling: `tools/azahar_profile.py --host <console IP>` uses
+  Rosalina's GDB server (ports 4000-4002; attaches to the `3dsx_app`
+  process each sample). Rosalina menu -> Debugger options -> Enable
+  debugger.
 
 ## Roadmap: disc image format and disc-read cost
 
