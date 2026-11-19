@@ -250,8 +250,27 @@ runtime-dirty pages, so they keep the full checks). The 3DS also paid far more
 for the diagnostic store hooks than the proxy showed (BIOS start 2.2x on the
 3DS vs +10% on the Mac).
 
-Next: a gameplay baseline (scripted input to The Hangar) - the 3DS build has
-no debug server, so input needs a platform-side script.
+## Gameplay baseline (2026-11-18)
+
+`tools/n3ds/input-script-hangar.txt`, copied to `3ds/thps2/input-script.txt`,
+presses through the menus into The Hangar by guest frame (the 3DS platform
+layer ORs it into libctru's button reads through link-time wrappers).
+`THPS2_SNAPSHOTS=<frames>` in `psx-env.txt` saves the presented frame as
+`snap_<frame>.bmp` for checking a run without watching it.
+
+| Window (Azahar, 804 MHz, lean profile) | fps | of PS1 speed |
+|---|---|---|
+| BIOS start (20-70) | 38.3 | 0.64x |
+| Sony logo (125-200) | 7.0 | 0.12x |
+| Game start (790-1000) | 11.9 | 0.20x |
+| **Gameplay, The Hangar (7000-7400)** | **9.2** | **0.15x** |
+
+Frames are vblanks (60 per PS1 second), so full speed in gameplay needs
+about 6.5x. The 3DS run's snapshots at guest frames 7100 and 7350 are
+identical to the Mac's at the same frames (pose, camera, timer): the
+emulation is deterministic across hosts.
+
+A full scripted run to frame 7410 takes about 15 minutes in Azahar.
 
 ## 60 fps
 

@@ -1,0 +1,11 @@
+# Boot to skating The Hangar (THPS2 USA). Same presses as tools/smoke_test.py,
+# placed by guest frame. Copy to <SD>/3ds/thps2/input-script.txt to use.
+# <guest frame> <frames held> <button>
+1780 9 START
+2260 9 START
+2740 9 START
+3220 9 CROSS
+3820 9 CROSS
+4540 9 CROSS
+5260 9 CROSS
+6580 9 CROSS

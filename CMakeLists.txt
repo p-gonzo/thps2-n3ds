@@ -66,6 +66,10 @@ if(NINTENDO_3DS)
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_platform.c")
     target_compile_definitions(psx-runtime PRIVATE
         THPS2_N3DS_DATA_DIR="${THPS2_N3DS_DATA_DIR}")
+    # Scripted input (input-script.txt, platform/n3ds/n3ds_platform.c) is
+    # ORed into the buttons SDL's 3DS joystick driver reads from libctru.
+    target_link_options(psx-runtime PRIVATE
+        "LINKER:--wrap=hidKeysDown" "LINKER:--wrap=hidKeysUp" "LINKER:--wrap=hidKeysHeld")
     ctr_generate_smdh(thps2.smdh
         NAME "THPS2 Recompiled"
         DESCRIPTION "Tony Hawk's Pro Skater 2 static recompilation (your own disc)"

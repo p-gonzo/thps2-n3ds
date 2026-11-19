@@ -86,10 +86,13 @@ u32 __ctru_linear_heap_size = 8u * 1024u * 1024u;
  * the common 320x240 mode copies 1:1; other modes (256/368/512/640 wide,
  * 480i) are sampled nearest-neighbour into it. Only the RGBA8 format SDL
  * sets up is handled; anything else declines and SDL presents as before. */
+static void snapshot_maybe(const uint32_t *argb, int w, int h, int pitch);   /* below */
+
 static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int pin_43)
 {
     (void)pin_43;   /* no widescreen yet: every frame is shown 4:3 */
     if (!argb || w <= 0 || h <= 0 || pitch < w) return 0;
+    snapshot_maybe(argb, w, h, pitch);
     if (gfxGetScreenFormat(GFX_TOP) != GSP_RGBA8_OES) return 0;
     u16 rows = 0, cols = 0;   /* 240 x 400: the framebuffer is rotated */
     u32 *fb = (u32 *)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, &rows, &cols);
@@ -114,6 +117,161 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
     gfxScreenSwapBuffers(GFX_TOP, false);
     gspWaitForVBlank();   /* the driver vsync the SDL path would have waited on */
     return 1;
+}
+
+/* ---- Scripted input and frame snapshots (opt-in testing aids) -------------
+ *
+ * input-script.txt in the data folder, one press per line:
+ *     <guest frame> <frames held> <button>[+<button>...]   e.g.  1800 9 START
+ * Buttons: 3DS names (A B X Y L R ZL ZR START SELECT UP DOWN LEFT RIGHT) or
+ * the PS1 buttons SDL's 3DS gamepad mapping puts on them (CROSS=B, CIRCLE=A,
+ * SQUARE=Y, TRIANGLE=X). Frames are the runtime's guest frame counter, so a
+ * script lines up the same at any emulation speed (CD and timer timing are
+ * guest-cycle based). The presses are ORed into libctru's hidKeysDown /
+ * hidKeysUp / hidKeysHeld through link-time wrappers (CMakeLists.txt), which
+ * is where SDL's 3DS joystick driver reads the buttons.
+ *
+ * THPS2_SNAPSHOTS=<frame>[,<frame>...] (psx-env.txt) saves the presented
+ * frame as snap_<frame>.bmp in the data folder the first time each frame is
+ * shown, so a scripted run can be checked without watching it. */
+extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
+
+typedef struct { uint32_t frame, hold, keys; } ScriptPress;
+static ScriptPress *s_script;
+static unsigned s_script_n;
+static u32 s_script_prev_keys, s_script_pending_up;
+
+static const struct { const char *name; u32 key; } k_buttons[] = {
+    {"A", KEY_A}, {"B", KEY_B}, {"X", KEY_X}, {"Y", KEY_Y}, {"L", KEY_L}, {"R", KEY_R},
+    {"ZL", KEY_ZL}, {"ZR", KEY_ZR}, {"START", KEY_START}, {"SELECT", KEY_SELECT},
+    {"UP", KEY_DUP}, {"DOWN", KEY_DDOWN}, {"LEFT", KEY_DLEFT}, {"RIGHT", KEY_DRIGHT},
+    {"CROSS", KEY_B}, {"CIRCLE", KEY_A}, {"SQUARE", KEY_Y}, {"TRIANGLE", KEY_X},
+};
+
+static u32 script_parse_keys(char *spec)
+{
+    u32 keys = 0;
+    for (char *tok = strtok(spec, "+"); tok; tok = strtok(NULL, "+")) {
+        unsigned i;
+        for (i = 0; i < sizeof k_buttons / sizeof k_buttons[0]; i++)
+            if (!strcmp(tok, k_buttons[i].name)) { keys |= k_buttons[i].key; break; }
+        if (i == sizeof k_buttons / sizeof k_buttons[0])
+            printf("thps2-n3ds: input-script: unknown button '%s'\n", tok);
+    }
+    return keys;
+}
+
+static void script_load(void)
+{
+    FILE *f = fopen("input-script.txt", "r");
+    if (!f) return;
+    char line[128];
+    unsigned cap = 0;
+    while (fgets(line, sizeof line, f)) {
+        unsigned long frame, hold;
+        char spec[64];
+        if (line[0] == '#' || sscanf(line, "%lu %lu %63s", &frame, &hold, spec) != 3) continue;
+        if (s_script_n == cap) {
+            cap = cap ? cap * 2 : 32;
+            ScriptPress *grown = realloc(s_script, cap * sizeof *s_script);
+            if (!grown) break;
+            s_script = grown;
+        }
+        s_script[s_script_n++] = (ScriptPress){ (uint32_t)frame, (uint32_t)hold, script_parse_keys(spec) };
+    }
+    fclose(f);
+    printf("thps2-n3ds: input-script: %u presses\n", s_script_n);
+}
+
+static u32 script_keys_now(void)
+{
+    const uint64_t f = s_frame_count;
+    u32 keys = 0;
+    for (unsigned i = 0; i < s_script_n; i++)
+        if (f >= s_script[i].frame && f < (uint64_t)s_script[i].frame + s_script[i].hold)
+            keys |= s_script[i].keys;
+    return keys;
+}
+
+u32 __real_hidKeysDown(void);
+u32 __real_hidKeysUp(void);
+u32 __real_hidKeysHeld(void);
+
+/* SDL calls hidKeysDown then hidKeysUp once per event pump. */
+u32 __wrap_hidKeysDown(void)
+{
+    u32 real = __real_hidKeysDown();
+    if (!s_script_n) return real;
+    const u32 now = script_keys_now();
+    const u32 down = now & ~s_script_prev_keys;
+    s_script_pending_up |= s_script_prev_keys & ~now;
+    s_script_prev_keys = now;
+    return real | down;
+}
+
+u32 __wrap_hidKeysUp(void)
+{
+    u32 real = __real_hidKeysUp();
+    const u32 up = s_script_pending_up;
+    s_script_pending_up = 0;
+    return real | up;
+}
+
+u32 __wrap_hidKeysHeld(void)
+{
+    return __real_hidKeysHeld() | (s_script_n ? s_script_prev_keys : 0u);
+}
+
+static uint32_t s_snap_frames[16];
+static unsigned s_snap_n;
+
+static void snapshots_load(void)
+{
+    const char *e = getenv("THPS2_SNAPSHOTS");
+    if (!e) return;
+    char buf[256];
+    snprintf(buf, sizeof buf, "%s", e);
+    for (char *tok = strtok(buf, ","); tok && s_snap_n < 16; tok = strtok(NULL, ","))
+        s_snap_frames[s_snap_n++] = (uint32_t)strtoul(tok, NULL, 10);
+}
+
+/* 24-bit bottom-up BMP of the ARGB frame. */
+static void snapshot_write(const uint32_t *argb, int w, int h, int pitch, uint32_t frame)
+{
+    char name[48];
+    snprintf(name, sizeof name, "snap_%lu.bmp", (unsigned long)frame);
+    FILE *f = fopen(name, "wb");
+    if (!f) return;
+    const uint32_t row = ((uint32_t)w * 3u + 3u) & ~3u, size = 54u + row * (uint32_t)h;
+    uint8_t hdr[54] = { 'B', 'M' };
+    #define PUT32(o, v) do { hdr[o] = (uint8_t)(v); hdr[o+1] = (uint8_t)((v) >> 8); \
+                             hdr[o+2] = (uint8_t)((v) >> 16); hdr[o+3] = (uint8_t)((v) >> 24); } while (0)
+    PUT32(2, size); PUT32(10, 54u); PUT32(14, 40u); PUT32(18, (uint32_t)w); PUT32(22, (uint32_t)h);
+    hdr[26] = 1; hdr[28] = 24; PUT32(34, row * (uint32_t)h);
+    #undef PUT32
+    fwrite(hdr, 1, sizeof hdr, f);
+    uint8_t *line = calloc(1, row);
+    for (int y = h - 1; line && y >= 0; y--) {
+        for (int x = 0; x < w; x++) {
+            const uint32_t p = argb[(size_t)y * (size_t)pitch + (size_t)x];
+            line[x * 3 + 0] = (uint8_t)p; line[x * 3 + 1] = (uint8_t)(p >> 8); line[x * 3 + 2] = (uint8_t)(p >> 16);
+        }
+        fwrite(line, 1, row, f);
+    }
+    free(line);
+    fclose(f);
+    printf("thps2-n3ds: snapshot %s (%dx%d)\n", name, w, h);
+}
+
+static void snapshot_maybe(const uint32_t *argb, int w, int h, int pitch)
+{
+    const uint64_t f = s_frame_count;
+    for (unsigned i = 0; i < s_snap_n; i++) {
+        if (s_snap_frames[i] && f >= s_snap_frames[i]) {
+            snapshot_write(argb, w, h, pitch, (uint32_t)f);
+            s_snap_frames[i] = 0;   /* once each */
+        }
+    }
 }
 
 /* One line at process exit, so a run that ends without a message from the
@@ -161,6 +319,9 @@ static void thps2_n3ds_process_setup(void)
         }
         fclose(env);
     }
+
+    script_load();      /* input-script.txt, if present */
+    snapshots_load();   /* THPS2_SNAPSHOTS, if set */
 
     /* Opt-in: an empty file named wait-for-debugger in the data folder holds
      * the process here for 15 s so a debugger (Azahar's GDB stub, or GDB over

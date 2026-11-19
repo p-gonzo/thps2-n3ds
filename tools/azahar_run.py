@@ -27,7 +27,8 @@ GAME = os.path.join(SUPPORT, "sdmc/3ds/thps2/thps2.3dsx")
 OUT = re.compile(r"^\[\s*([0-9.]+)\] Debug\.Emulated <Debug> \S+: ?(.*)$")
 END = re.compile(r"Cleaning up process|<Critical>")
 FPS = re.compile(r"\[FPS\] game: ([0-9.]+) fps .*frames: (\d+)")
-RANGES = ((20, 70, "BIOS start"), (125, 200, "Sony logo"), (790, 1000, "game start"))
+RANGES = ((20, 70, "BIOS start"), (125, 200, "Sony logo"), (790, 1000, "game start"),
+          (7000, 7400, "gameplay (needs tools/n3ds/input-script-hangar.txt)"))
 
 
 def azahar_pids():
