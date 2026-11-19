@@ -411,6 +411,22 @@ start 13.2 vs 17.8 fps; its own validity path bypasses the verdict cache), so
 it stays off. Next: change the recompiler's emitted dispatcher (game-text
 addresses skip the BIOS search; a small lookup cache), regenerate, verify.
 
+**Gameplay on hardware** (The Hangar, frames 9983-11148, 100 samples; 51 on
+the game thread, 21 SDL audio thread on core 1, 28 idle DSP/GSP threads):
+
+| Game thread | Share |
+|---|---|
+| Software rasteriser + display (shaded textured triangles, texel fetch) | 35% |
+| Dispatch + code validity | 10% |
+| GTE (geometry coprocessor) | ~10% |
+| Interrupts + timing (+ edge policy) | ~12% |
+| 64-bit helpers, store bookkeeping, SPU, present | ~10% |
+
+So in real gameplay the CPU software rasteriser is the largest cost, and a
+PICA200 (citro3d) renderer is the biggest available lever (CTR-3D's approach:
+CPU texture decode cache, GPU-drawn triangles). Dispatch is ~10% here, not the
+26% the logo showed; still worth the emitter fix, but second.
+
 SDL's audio thread runs on core 1 (APT_SetAppCpuTimeLimit(30)) and spends its
 time resampling (`rab_pull`, 64-bit divisions); it shares a lock with the main
 thread. Also to look at.
