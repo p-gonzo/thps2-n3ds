@@ -50,7 +50,7 @@ static void measure_cpu_mode(void)
     printf("thps2-n3ds: cpu check: loop %llu ticks in normal mode, %llu with speedup (first %llu); "
            "ratio (normal / as running) %.2f -> %s (emulators: ignore)\n", (unsigned long long)slow, (unsigned long long)fast2,
            (unsigned long long)fast1, s_cpu_ratio,
-           s_cpu_ratio > 2.5 ? "804 MHz mode active" : "speedup NOT in effect (268 MHz)");
+           s_cpu_ratio < 0.8 ? "not measurable (emulator timer)" : s_cpu_ratio > 2.5 ? "804 MHz mode active" : "speedup NOT in effect (268 MHz)");
 }
 
 int g_n3ds_gfx_ready = 0;
@@ -161,8 +161,10 @@ void n3ds_hud_tick(void)
     snprintf(line, sizeof line, "HEAP %lu/%lu MB", (unsigned long)(n3ds_heap_used() >> 20),
              (unsigned long)(envGetHeapSize() >> 20));
     draw_text(fb, 12, 180, 3, WHITE, line);
-    snprintf(line, sizeof line, "CPU %s X%.1f%s", s_cpu_ratio > 2.5 ? "804MHZ" : "268MHZ",
-             s_cpu_ratio, g_n3ds_log ? "  LOG ON" : "");
+    /* Normal mode cannot be faster than speed mode: a ratio well below 1
+     * means the timer does not follow the CPU clock (an emulator). */
+    const char *cpu = s_cpu_ratio < 0.8 ? "N/A EMU" : s_cpu_ratio > 2.5 ? "804MHZ" : "268MHZ";
+    snprintf(line, sizeof line, "CPU %s X%.1f%s", cpu, s_cpu_ratio, g_n3ds_log ? "  LOG ON" : "");
     draw_text(fb, 12, 214, 2, s_cpu_ratio > 2.5 ? GREY : YELLOW, line);
     if (g_n3ds_log) {
         printf("thps2-n3ds: status fps=%.2f frame=%lu heap=%lu/%lu MB\n", fps,
