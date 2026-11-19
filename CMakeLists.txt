@@ -30,8 +30,9 @@ if(NINTENDO_3DS)
     # Azahar has no cache model, so -Os (half the code) may do better on
     # hardware; THPS2_N3DS_GENERATED_CFLAGS=-Os is the mixed option.
     set(THPS2_N3DS_OPT "-O3" CACHE STRING "Release optimisation level for 3DS builds")
-    set(CMAKE_C_FLAGS_RELEASE "${THPS2_N3DS_OPT} -DNDEBUG")
-    set(CMAKE_CXX_FLAGS_RELEASE "${THPS2_N3DS_OPT} -DNDEBUG")
+    # -g only adds debug info (line numbers for GDB profiles); code is unchanged.
+    set(CMAKE_C_FLAGS_RELEASE "${THPS2_N3DS_OPT} -g -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_RELEASE "${THPS2_N3DS_OPT} -g -DNDEBUG")
 else()
     set(PSX_SETUP_WIZARD ON CACHE BOOL
         "Advertise first-run setup wizard + Generate & rebuild in recomp-ui" FORCE)

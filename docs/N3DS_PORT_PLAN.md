@@ -272,6 +272,33 @@ emulation is deterministic across hosts.
 
 A full scripted run to frame 7410 takes about 15 minutes in Azahar.
 
+**Gameplay profile** (100 GDB samples in The Hangar, `tools/azahar_profile.py
+--classify`; raw stacks in `out/captures/n3ds-hangar/gameplay-stacks.txt`):
+
+| Category | Share |
+|---|---|
+| Interrupts + timing (`psx_check_interrupts` 23%, `psx_cpu_charge` 5%) | 37% |
+| GPU software rasteriser (shaded textured triangles, texel fetch) | 20% |
+| Dispatch + code validity | 12% |
+| GTE (geometry coprocessor) | ~10% |
+| Waiting / system calls | 5% |
+| Game code | 5% |
+| Store bookkeeping, SPU, 64-bit helpers, CD/DMA | ~10% |
+
+On the Mac proxy interrupts were 15-20%; on the in-order ARM11 they lead.
+`psx_check_interrupts` is 2,232 instructions with a 524-byte frame, called
+at every basic-block edge of game code; samples spread over its prologue and
+epilogue, `psx_netplay_active()` and `psx_interrupt_delivery_needed()` calls
+(netplay off), the savestate-poll maintenance block and `event_ring_record`.
+Nothing in it is slow alone; the full function runs thousands of times per
+frame to find nothing to deliver.
+
+**Next:** an interrupt-check fast path at the block-edge call site that
+settles "nothing pending, nothing due" inline while keeping what the full
+function guarantees (cycle-batch flush, periodic maintenance, netplay rules).
+After that, a PICA200 renderer is the other large lever (rasteriser + GTE
+~30%).
+
 ## 60 fps
 
 THPS2 simulates at ~30 fps on PS1. Two separate goals:
