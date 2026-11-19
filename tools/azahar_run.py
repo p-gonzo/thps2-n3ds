@@ -8,6 +8,10 @@ build routes stdout/stderr to) with timestamps.
     python3 tools/azahar_run.py                 # run, stop waiting once it exits
     python3 tools/azahar_run.py --timeout 120   # give a running game longer
     python3 tools/azahar_run.py --keep          # leave Azahar open afterwards (default: always close)
+    python3 tools/azahar_run.py --unthrottled   # correctness runs: no speed limit (fps meaningless)
+
+Speed runs keep Azahar's speed limit at 100% and the CPU clock at 300%, so
+they stay comparable with the baselines and the ~2x hardware ratio.
 
 Needs Azahar's "instant debug log" setting on and a log filter that includes
 Debug.Emulated:Debug (both in Azahar's qt-config.ini).
@@ -22,6 +26,7 @@ HOME = os.path.expanduser("~")
 APP = os.path.join(HOME, "Applications/Azahar/azahar-macos-arm64-2126.2/Azahar.app")
 SUPPORT = os.path.join(HOME, "Library/Application Support/Azahar")
 LOG = os.path.join(SUPPORT, "log/azahar_log.txt")
+CONFIG = os.path.join(SUPPORT, "config/qt-config.ini")
 GAME = os.path.join(SUPPORT, "sdmc/3ds/thps2/thps2.3dsx")
 
 OUT = re.compile(r"^\[\s*([0-9.]+)\] Debug\.Emulated <Debug> \S+: ?(.*)$")
@@ -47,6 +52,20 @@ def close_azahar():
         subprocess.run(["kill", "-9", str(p)])
 
 
+def set_frame_limit(unthrottled):
+    """Azahar must be closed: it rewrites qt-config.ini when it quits."""
+    with open(CONFIG) as f:
+        text = f.read()
+    if unthrottled:
+        text = re.sub(r"(?m)^frame_limit=.*$", "frame_limit=0", text)
+        text = re.sub(r"(?m)^frame_limit\\default=.*$", r"frame_limit\\default=false", text)
+    else:
+        text = re.sub(r"(?m)^frame_limit=.*$", "frame_limit=100", text)
+        text = re.sub(r"(?m)^frame_limit\\default=.*$", r"frame_limit\\default=true", text)
+    with open(CONFIG, "w") as f:
+        f.write(text)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--game", default=GAME)
@@ -55,9 +74,21 @@ def main():
     ap.add_argument("--quiet", action="store_true", help="print only [FPS] lines and the summary")
     ap.add_argument("--until-frame", type=int, default=0,
                     help="stop once an [FPS] line reports this guest frame (needs PSX_FPS_TELEMETRY=1)")
+    ap.add_argument("--unthrottled", action="store_true",
+                    help="run without Azahar's speed limit for this run only (correctness, not speed)")
     a = ap.parse_args()
 
     close_azahar()
+    set_frame_limit(a.unthrottled)
+    try:
+        run(a)
+    finally:
+        if not a.keep:
+            close_azahar()
+            set_frame_limit(False)   # back to the 100% speed-run setting
+
+
+def run(a):
     # LaunchServices needs a moment to notice a quit app; opening it again too
     # soon fails with -600 (procNotFound). Settle, then retry briefly.
     time.sleep(1.0)
@@ -105,10 +136,8 @@ def main():
         vals = sorted(f for f, fr in fps_lines if lo < fr <= hi)
         if vals:
             print(f"-- fps {label:>14} (frames {lo}-{hi}): {vals[len(vals) // 2]:5.1f}  ({len(vals)} readings)")
-    # Always close Azahar when done (ended, reached --until-frame, or timed
-    # out); --keep leaves it open for a run meant to be watched.
-    if not a.keep:
-        close_azahar()
+    # main() always closes Azahar when done (ended, reached --until-frame, or
+    # timed out); --keep leaves it open for a run meant to be watched.
 
 
 if __name__ == "__main__":

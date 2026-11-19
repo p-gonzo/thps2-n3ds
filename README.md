@@ -178,6 +178,39 @@ New 3DS clock. It does not model the New 3DS's L2 cache. An empty file named `wa
 (`arm-none-eabi-gdb` against `build-3ds/*.elf`, Azahar's GDB stub) can
 attach.
 
+### Starting in The Hangar (correctness runs)
+
+Booting to gameplay takes about 15 minutes in Azahar. For checks that need
+gameplay but not speed numbers, start from a PS1 save state instead:
+
+```bash
+python3 tools/hangar_state.py --build build-dbg3ds
+```
+
+```bash
+python3 tools/n3ds_stage_sd.py --sd "$HOME/Library/Application Support/Azahar/sdmc" --state
+```
+
+```bash
+python3 tools/azahar_run.py --unthrottled
+```
+
+`hangar_state.py` drives a Mac build along the scripted path, saves the guest
+state at frame 7000, checks that it reloads (screenshot in `out/state/`) and
+copies it to `out/state/`. `--state` stages it into `3ds/thps2/saves/` and sets
+`PSX_LOAD_SLOT=1` in `psx-env.txt`; the 3DS build loads it in about half a
+second. `--no-state` turns it off again. The state must come from a Mac build
+with the 3DS's execution identity: configure `build-dbg3ds` with
+`-DPSX_LEAN_HOST=ON -DPSX_OBSERVATION_TIME=ON -DPSX_REWIND=OFF
+-DPSX_DEBUG_TOOLS=ON` (the cookie in `psx_execution/*/profile.h` must equal
+`build-3ds`'s, otherwise the load is refused with
+`enhancement_memory_layout_or_execution_profile_or_host_provider`). Make a new
+state whenever that identity changes.
+
+`--unthrottled` lifts Azahar's speed limit for that run only and restores it
+afterwards. Speed numbers always come from full scripted runs at speed limit
+100% and clock 300%, which keep them comparable with the baselines.
+
 ## Repository layout
 
 | Path | What it is |

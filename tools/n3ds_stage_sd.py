@@ -10,6 +10,10 @@ Writes <sd>/3ds/thps2/ with everything the .3dsx needs at run time:
     python3 tools/n3ds_stage_sd.py --sd "$HOME/Library/Application Support/Azahar/sdmc"
     python3 tools/n3ds_stage_sd.py --sd /Volumes/NINTENDO3DS
 
+With --state, also stages the guest save state from tools/hangar_state.py
+(out/state/) into saves/ and writes PSX_LOAD_SLOT=1 into psx-env.txt, so the
+game starts in The Hangar within seconds; --no-state removes both again.
+
 The disc image is about 750 MB; it is copied only when missing or changed.
 Nothing here is ever committed: it is your own data on your own card.
 """
@@ -41,6 +45,11 @@ def main():
     ap.add_argument("--build", default=os.path.join(ROOT, "build-3ds"))
     ap.add_argument("--bios", default=os.path.join(ROOT, "bios", "SCPH1001.bin"))
     ap.add_argument("--disc-dir", default=os.path.join(ROOT, "disc"))
+    st = ap.add_mutually_exclusive_group()
+    st.add_argument("--state", action="store_true",
+                    help="stage out/state/ and load it at launch (PSX_LOAD_SLOT=1)")
+    st.add_argument("--no-state", action="store_true",
+                    help="stop loading the staged state at launch")
     ARGS = ap.parse_args()
 
     if not os.path.isdir(ARGS.sd):
@@ -62,6 +71,26 @@ def main():
     with open(os.path.join(dest, "bios.cfg"), "w") as f:
         f.write("bios/SCPH1001.bin\n")
     print("  wrote       3ds/thps2/bios.cfg")
+    if ARGS.state or ARGS.no_state:
+        set_load_slot(dest, ARGS.state)
+
+
+def set_load_slot(dest, on):
+    state_dir = os.path.join(ROOT, "out", "state")
+    if on:
+        rel_file = os.path.join(state_dir, "relpath.txt")
+        if not os.path.exists(rel_file):
+            sys.exit("no out/state/relpath.txt: run tools/hangar_state.py first")
+        rel = open(rel_file).read().strip()
+        copy_if_changed(os.path.join(state_dir, os.path.basename(rel)),
+                        os.path.join(dest, "saves", rel))
+    env = os.path.join(dest, "psx-env.txt")
+    lines = open(env).read().splitlines() if os.path.exists(env) else []
+    lines = [l for l in lines if not l.startswith("PSX_LOAD_SLOT=")]
+    if on: lines.append("PSX_LOAD_SLOT=1")
+    with open(env, "w") as f:
+        f.write("".join(l + "\n" for l in lines))
+    print(f"  {'set' if on else 'cleared'}     PSX_LOAD_SLOT in 3ds/thps2/psx-env.txt")
 
 
 if __name__ == "__main__":
