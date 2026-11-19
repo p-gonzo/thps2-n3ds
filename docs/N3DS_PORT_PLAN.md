@@ -317,8 +317,26 @@ code 23.0 MB.
 | Gameplay | 9.2 | 9.3 |
 
 Gameplay frames 7100/7350 pixel-identical with it off and on, on macOS and
-the 3DS. Gameplay barely moved: during play most edges are slow edges (a
-device deadline is due), which the next profile has to explain.
+the 3DS.
+
+Why gameplay barely moved (measured in The Hangar): slow edges are rare,
+0.86% of 6.5 million edges per 10 s (98.7% of those because no device
+deadline was scheduled yet). The full interrupt check is gone from the
+profile, but its cost moved rather than vanished:
+
+| Category (100 GDB samples, gameplay) | Before | Observation time |
+|---|---|---|
+| Interrupts + timing | 37% | 17% |
+| Block edge itself (`psx_block_edge_impl`, delivery test) | - | 12% |
+| Store/load bookkeeping (`cpu_store_isolated`, direct-note, hooks) | 4% | 13% |
+| Dispatch + code validity | 12% | 12% |
+| GPU software rasteriser | 20% | 12% |
+| Game code | 5% | 10% |
+
+The remaining cost is spread thin: a call and a policy test at every block
+edge (the inlined form does not fit 3DS memory), store bookkeeping on every
+guest store (`psx_native_store_word` 22% inclusive), dispatch, rasteriser.
+No single item is above ~12%.
 
 Roadmap: an out-of-memory failure (`std::bad_alloc`) on the 3DS currently
 ends the process silently; report it on screen.
