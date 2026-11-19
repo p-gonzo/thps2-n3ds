@@ -97,7 +97,7 @@ static int ensure_texture(int w, int h)
     return 1;
 }
 
-static void set_state(void)
+static void set_state(C3D_Tex *tex)
 {
     C3D_BindProgram(&s_program);
     C3D_AttrInfo *attr = C3D_GetAttrInfo();
@@ -105,7 +105,7 @@ static void set_state(void)
     AttrInfo_AddLoader(attr, 0, GPU_FLOAT, 4);   /* v0 position */
     AttrInfo_AddLoader(attr, 1, GPU_FLOAT, 4);   /* v1 texcoord */
     C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, s_proj_loc, &s_proj);
-    C3D_TexBind(0, &s_tex);
+    C3D_TexBind(0, tex);
     C3D_TexEnv *env = C3D_GetTexEnv(0);
     C3D_TexEnvInit(env);
     C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, 0, 0);
@@ -121,6 +121,8 @@ static void vertex(float x, float y, float u, float v)
     C3D_ImmSendAttrib(x, y, 0.5f, 1.0f);
     C3D_ImmSendAttrib(u, v, 0.0f, 1.0f);
 }
+
+static void draw_frame(C3D_Tex *tex, int tw, int th, int x, int y, int w, int h);
 
 int n3ds_gpu_present(const uint32_t *argb, int w, int h, int pitch)
 {
@@ -138,28 +140,41 @@ int n3ds_gpu_present(const uint32_t *argb, int w, int h, int pitch)
                             (u32 *)s_tex.data, GX_BUFFER_DIM(s_tex_w, s_tex_h),
                             TEXTURE_TRANSFER_FLAGS);
 
+    draw_frame(&s_tex, s_tex_w, s_tex_h, 0, 0, w, h);
+    return 1;
+}
+
+/* One frame on the top screen: the GPU renderer's batches (into its VRAM
+ * copy), then texture rectangle [x, x+w) x [y, y+h) (texels of a tw x th
+ * texture, row y at t = y / th) scaled to 320x240 in the middle of the
+ * screen, black bars beside it. */
+static void draw_frame(C3D_Tex *tex, int tw, int th, int x, int y, int w, int h)
+{
     /* Nearest sampling happens at output pixel centres (x + 0.5). Shifting
      * the coordinates back half an output pixel (plus a tiny epsilon against
      * landing exactly on a texel edge) picks source column floor(x * w / 320)
      * and row floor(y * h / 240): the same pixels the CPU presenter chose.
-     * Image row 0 is at t = 0: the flipped upload and OrthoTilt's y-down
-     * projection cancel out (checked against the CPU presenter's screen). */
-    /* 1/32 source pixel: well above the PICA's texture-coordinate
-     * precision (1/1024 was lost and picked the column to the left), and
-     * below the smallest step of x * w / 320 for PS1 widths (0.05 at 368). */
+     * 1/32 source pixel: well above the PICA's texture-coordinate precision
+     * (1/1024 was lost and picked the column to the left), and below the
+     * smallest step of x * w / 320 for PS1 widths (0.05 at 368). */
     const float eps = 1.0f / 32.0f;
     const float sx = (float)w / (float)OUT_W, sy = (float)h / (float)OUT_H;
-    const float u0 = (-0.5f * sx + eps) / (float)s_tex_w;
-    const float u1 = (((float)OUT_W - 0.5f) * sx + eps) / (float)s_tex_w;
-    const float v0 = (-0.5f * sy + eps) / (float)s_tex_h;
-    const float v1 = (((float)OUT_H - 0.5f) * sy + eps) / (float)s_tex_h;
+    const float u0 = ((float)x - 0.5f * sx + eps) / (float)tw;
+    const float u1 = ((float)x + ((float)OUT_W - 0.5f) * sx + eps) / (float)tw;
+    const float v0 = ((float)y - 0.5f * sy + eps) / (float)th;
+    const float v1 = ((float)y + ((float)OUT_H - 0.5f) * sy + eps) / (float)th;
     const float x0 = (float)OUT_X, x1 = (float)(OUT_X + OUT_W);
 
-    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-    n3ds_shadow_render();   /* Phase 2: this frame's untextured primitives */
+    /* No C3D_FRAME_SYNCDRAW: C3D_FrameSync always waits at least one vblank,
+     * which below full speed only adds up to 16.7 ms to every frame. The
+     * swap still happens at vblank, and the runtime's own wall-clock cap
+     * (16.67 ms) keeps it from running faster than the PS1. Waits only if
+     * the GPU is still drawing the previous frame. */
+    C3D_FrameBegin(0);
+    n3ds_shadow_render();   /* the GPU renderer's primitives for this frame */
     C3D_RenderTargetClear(s_top, C3D_CLEAR_ALL, 0x000000FF, 0);
     C3D_FrameDrawOn(s_top);
-    set_state();
+    set_state(tex);
     C3D_ImmDrawBegin(GPU_TRIANGLE_STRIP);
     vertex(x0, 0.0f,          u0, v0);
     vertex(x0, (float)OUT_H,  u0, v1);
@@ -168,6 +183,13 @@ int n3ds_gpu_present(const uint32_t *argb, int w, int h, int pitch)
     C3D_ImmDrawEnd();
     C3D_FrameEnd(0);
     s_drawn = 1;
+}
+
+int n3ds_gpu_present_texture(C3D_Tex *tex, int x, int y, int w, int h)
+{
+    if (s_state == 0) s_state = gpu_init() ? 1 : -1;
+    if (s_state < 0) return 0;
+    draw_frame(tex, tex->width, tex->height, x, y, w, h);
     return 1;
 }
 

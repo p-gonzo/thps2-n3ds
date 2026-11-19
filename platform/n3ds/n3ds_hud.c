@@ -172,7 +172,7 @@ void n3ds_hud_tick(void)
                (unsigned long)s_frame_count, (unsigned long)(n3ds_heap_used() >> 20),
                (unsigned long)(envGetHeapSize() >> 20));
         if (n3ds_shadow_enabled()) {
-            char sh[320];
+            char sh[512];
             n3ds_shadow_status(sh, sizeof sh);
             printf("thps2-n3ds: shadow %s\n", sh);
         }

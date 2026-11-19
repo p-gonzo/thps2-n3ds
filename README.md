@@ -165,11 +165,14 @@ switches back to the older CPU copy for comparisons.
 frame, `snap_<frame>.bmp` (the PS1 frame) and `screen_<frame>.bmp` (the whole
 top screen as shown).
 
-GPU renderer development switches (same file): `THPS2_GPU_SHADOW=1` also
-draws untextured primitives on the GPU into its own copy of VRAM (saved as
-`gpu_<frame>.bmp` with snapshots; the screen still shows the software
-renderer). `PSX_GR_TEXTURED_AS_SHADES=1` replaces textures with flat colours
-in every renderer, so the two can be compared. Neither is for playing.
+GPU renderer (same file): `THPS2_GPU=1` draws the game on the 3DS GPU and
+shows it from there, about 1.6x faster than the software renderer in
+Azahar; it is not yet the default. Development switches: `THPS2_GPU_SHADOW=1`
+draws on the GPU beside the software renderer, which still presents (snapshots
+then add `gpu_<frame>.bmp`, the GPU's copy, to compare with `snap_<frame>.bmp`);
+`PSX_GR_TEXTURED_AS_SHADES=1` replaces textures with flat colours in every
+renderer. `tools/azahar_case.py` runs such a case in Azahar and compares the
+frames.
 
 ### Log file
 

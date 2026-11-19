@@ -8,11 +8,17 @@
 #define N3DS_GPU_H
 
 #include <stdint.h>
+#include <citro3d.h>
 
 /* Draws one ARGB8888 frame (w x h, pitch in pixels) on the top screen and
  * presents it at the next vblank. Returns 0 if the GPU path is unavailable
  * (citro3d failed to start); the caller then presents on the CPU. */
 int n3ds_gpu_present(const uint32_t *argb, int w, int h, int pitch);
+
+/* Draws texels [x, x+w) x [y, y+h) of tex (row y at t = y / height) on the
+ * top screen like n3ds_gpu_present: the GPU renderer's own VRAM copy, shown
+ * without a CPU conversion. */
+int n3ds_gpu_present_texture(C3D_Tex *tex, int x, int y, int w, int h);
 
 /* Copies the last frame drawn on the top screen into out (400 x 240 ARGB,
  * row-major, y down): what the player sees, black bars included. Returns 0

@@ -72,6 +72,7 @@ if(NINTENDO_3DS)
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_hud.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_gpu.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_gpu_shadow.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_texcache.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_fatal.cpp")
     # Commit ids for the log header (log.txt names the exact build): taken
     # at build time by cmake/n3ds_build_id.cmake, so they never go stale.

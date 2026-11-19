@@ -85,8 +85,10 @@ _Unwind_Ptr __gnu_Unwind_Find_exidx(_Unwind_Ptr pc, int *nrec)
  * 124 MB and this program's code and static data take about 97 MB, so the
  * default split leaves nothing for the normal heap and libctru stops before
  * main. Linear memory is only for GPU/DSP-visible buffers: SDL's framebuffers
- * (about 1.3 MB for both screens) and audio. The rest becomes the normal heap. */
-u32 __ctru_linear_heap_size = 8u * 1024u * 1024u;
+ * (about 1.3 MB for both screens), audio, and the GPU renderer's vertex
+ * buffers (1.3 MB), snapshot readback (1 MB) and decoded textures (up to
+ * 6 MB, n3ds_texcache.c). The rest becomes the normal heap. */
+u32 __ctru_linear_heap_size = 16u * 1024u * 1024u;
 
 /* Frame presenter (psxrecomp host_present.h). The runtime's software path
  * would otherwise go through SDL's software renderer: a texture upload, a
@@ -102,6 +104,8 @@ u32 __ctru_linear_heap_size = 8u * 1024u * 1024u;
  * sets up is handled; anything else declines and SDL presents as before. */
 static int snapshot_maybe(const uint32_t *argb, int w, int h, int pitch);   /* below */
 static void screen_snapshot_write(const uint32_t *rotated_rgba, uint32_t frame);
+static uint32_t s_snap_frames[16];   /* THPS2_SNAPSHOTS guest frames, 0 = taken */
+static unsigned s_snap_n;
 static void snapshot_write_named(const uint32_t *argb, int w, int h, int pitch, const char *base);
 static uint32_t s_screen_snap_frame;   /* nonzero: also save the top screen */
 
@@ -134,8 +138,38 @@ static int present_top_cpu(const uint32_t *argb, int w, int h, int pitch)
         screen_snapshot_write(fb, s_screen_snap_frame);
         s_screen_snap_frame = 0;
     }
+    /* Swapped at the next vblank; no blocking wait (see n3ds_gpu.c draw_frame). */
     gfxScreenSwapBuffers(GFX_TOP, false);
-    gspWaitForVBlank();   /* the driver vsync the SDL path would have waited on */
+    return 1;
+}
+
+/* GPU renderer (THPS2_GPU=1): the displayed buffer straight from the GPU's
+ * VRAM copy, no CPU conversion. Snapshots then save gpu_<frame>.bmp (the
+ * buffer) and screen_<frame>.bmp; there is no CPU frame for snap_. */
+static int n3ds_present_vram(int x, int y, int w, int h, int depth24)
+{
+    if (!n3ds_shadow_present_vram(x, y, w, h, depth24)) return 0;
+    const uint64_t f = s_frame_count;
+    int snap = 0;
+    for (unsigned i = 0; i < s_snap_n; i++)
+        if (s_snap_frames[i] && f >= s_snap_frames[i]) { s_snap_frames[i] = 0; snap = 1; }
+    if (snap) {
+        static uint32_t gbuf[1024 * 512];
+        char base[32];
+        if (n3ds_shadow_capture(x, y, w, h, gbuf)) {
+            snprintf(base, sizeof base, "gpu_%lu", (unsigned long)f);
+            snapshot_write_named(gbuf, w, h, w, base);
+        }
+        static uint32_t shot[400 * 240], rot[400 * 240];
+        if (n3ds_gpu_capture_top(shot)) {
+            for (int yy = 0; yy < 240; yy++)
+                for (int xx = 0; xx < 400; xx++)
+                    rot[xx * 240 + (239 - yy)] = shot[yy * 400 + xx] << 8;
+            screen_snapshot_write(rot, (uint32_t)f);
+        }
+    }
+    g_n3ds_gfx_ready = 1;
+    n3ds_hud_tick();
     return 1;
 }
 
@@ -291,8 +325,6 @@ u32 __wrap_hidKeysHeld(void)
     return __real_hidKeysHeld() | (s_script_n ? s_script_prev_keys : 0u);
 }
 
-static uint32_t s_snap_frames[16];
-static unsigned s_snap_n;
 
 static void snapshots_load(void)
 {
@@ -412,6 +444,7 @@ static void thps2_n3ds_process_setup(void)
     printf("thps2-n3ds: stdout reaches the debug log\n");
     atexit(thps2_n3ds_note_exit);
     psx_host_present_register(n3ds_present_top);
+    psx_host_present_vram_register(n3ds_present_vram);
     /* If the folder is missing, the runtime reports the missing game.toml /
      * BIOS / disc on its own; nothing to add here. */
     (void)chdir(THPS2_N3DS_DATA_DIR);

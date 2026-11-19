@@ -1,6 +1,6 @@
 # PICA200 renderer for the THPS2 3DS port: design
 
-Status: Phases 1 and 2 done (2026-11-19); Phase 3 (textures) next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
+Status: Phases 1-2 done; Phase 3 done in Azahar, hardware check pending (2026-11-19). Phase 0 showed the design holds for THPS2 ("Phase 0 results").
 
 **Aspect ratio rule:** the PS1 picture is always shown at 4:3, 320x240
 centred on the 400x240 top screen with black bars. Nothing is ever stretched
@@ -166,6 +166,49 @@ everything, and the GPU draws in parallel into its own copy of VRAM:
 with CLUT and texture window, keyed and invalidated as above; modulation x2,
 raw texture, STP two-pass. This is where the 35% moves. Gate: frame compare
 plus hardware fps.
+
+*Done in Azahar (2026-11-19); hardware check pending.* `THPS2_GPU=1`.
+
+- Texture cache (`platform/n3ds/n3ds_texcache.c`): decoded on the CPU from
+  the authoritative CPU VRAM into RGBA5551 textures in linear memory, keyed
+  by (page, depth, CLUT, texture-window shape, variant). Without a texture
+  window only the aligned power-of-two block of the page the primitives
+  sample is decoded (grown on demand); with one, the window's tile, which a
+  repeating texture reproduces exactly (u -> tile origin + u mod size, as
+  the PS1's mask/offset does). Variants: all non-zero texels, or for
+  semi-transparent primitives the texels without / with the STP bit (two
+  passes: opaque, then blended). Freshness: per 64x16 VRAM cell write serials
+  (uploads, fills, copies, every primitive's bounding box) checked against
+  the decode; retired textures are freed three frames later. Texture memory
+  starts at t = 1, so texel row j is stored at memory row H - 1 - j.
+- THPS2 in The Hangar: 15-38 page/CLUT keys per frame (peak 75); 65% of
+  textured primitives use a texture window, ~15% are semi-transparent; no
+  15-bit or raw textures. Steady state: 2.4 MB of textures, every lookup a
+  hit, no decodes.
+- Drawing: modulate texel x vertex colour x 2 (texture combiner, scale 2x),
+  raw = texture only; alpha test drops texels decoded transparent.
+- Presentation (psxrecomp hooks): `psx_host_present_vram_register` lets the
+  platform show the displayed buffer from its GPU copy before main.cpp's CPU
+  conversion; `gr_set_host_draw_owner` makes the software backend skip
+  primitives into buffers the GPU owns. Ownership: a displayed buffer is
+  acquired by the first primitive into it once two presents passed without
+  CPU writes (uploads, copies, lines); acquiring first pushes its CPU VRAM
+  pixels into the GPU copy (a batch, in drawing order). CPU writes hand it
+  back; FMV (24-bit) always presents from the CPU.
+- Results in Azahar: GPU frames vs the software renderer (shadow mode, same
+  guest frames): menus 94-100% exact (character select, title, options all
+  correct); gameplay visually identical, most pixels within 1-2 steps, a few
+  thousand per frame further off. Those are texel-boundary differences: the
+  software rasteriser interpolates u/v per scanline from edges rounded to
+  whole pixels, the GPU from exact plane equations (as PS1 hardware does).
+  GPU mode (`THPS2_GPU=1`) frames are identical to shadow mode's GPU frames.
+- Speed in Azahar (Hangar state, speed limit 100%, clock 300%): software
+  9.35 fps, GPU 14.97; after removing the per-frame vblank wait from both
+  presenters (C3D_FRAME_SYNCDRAW / gspWaitForVBlank always waited at least one
+  vblank; the runtime's wall-clock cap still limits to 60), software 10.37,
+  **GPU 17.01 (+64%)**.
+- Known gaps (Phase 4): copies out of GPU-owned buffers read stale CPU VRAM
+  (THPS2's two menu frame grabs); lines are software-only.
 
 **Phase 4 - coherence and presentation.** Readback path, CPU-owned display
 regions, FMV, the pause/feedback effects THPS2 uses (Phase 0 tells which).
