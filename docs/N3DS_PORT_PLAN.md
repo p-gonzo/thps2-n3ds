@@ -442,6 +442,29 @@ could; small share of the frame).
 
 Next: the PICA200 renderer, designed in `N3DS_GPU_RENDERER.md`.
 
+## Hardware profile with the GPU renderer (2026-11-19, build 3886cd2)
+
+New 3DS, Hangar save state, `THPS2_GPU=1` (7.7 fps), Rosalina GDB, 100
+samples; 54 on the game thread (the rest: ndsp/SDL audio threads and the
+idle GSP event thread). Inclusive shares of the game thread, top 8 frames:
+
+| Area | Share |
+|---|---|
+| Guest memory access helpers (`psx_write_*_raw`, `psx_read_*`, `psx_native_span_*`, `psx_direct_note_helper`) | ~31% |
+| Block edge / interrupt checks (`psx_block_edge_impl` 10% self) | ~17% |
+| SPU mixing on the game thread (`spu_catch_up` < `sdl_audio_pump`, reverb) | ~13% |
+| GTE | ~11% |
+| Per-dispatch code validity (`dirty_ram_text_native_ok_ranges_from`) | ~6% |
+| GPU command parsing (gpu.c) | ~3% |
+| GPU renderer, CPU side (n3ds_*, texture cache) | ~2% |
+| Software rasteriser / display conversion | ~2% (non-display draws, fills) |
+
+The renderer work moved the old 35% (rasteriser + display conversion) off
+the CPU; what remains is emulation. Candidates, largest first: the guest
+memory path (pointer-based RAM since the 64 MB image fix, store
+bookkeeping), SPU mixing off the game thread (another core; its guest-visible
+state must stay on the game thread), block-edge cost, GTE, dispatch checks.
+
 ## Roadmap: disc image format and disc-read cost
 
 Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
