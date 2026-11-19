@@ -341,6 +341,28 @@ No single item is above ~12%.
 Roadmap: an out-of-memory failure (`std::bad_alloc`) on the 3DS currently
 ends the process silently; report it on screen.
 
+## First hardware run: the 64 MB program-image limit (2026-11-18)
+
+On a New 3DS (Luma3DS / Rosalina HBL) the build crashed in the `loader`
+process with result 0xE0E01BF5 (OS, invalid argument, invalid address). Luma's
+loader maps every program image (code + static data, including .bss) at
+0x10000000 before creating the process, and the loader itself is linked at
+0x14000000 (`sysmodules/loader`, both `hbldr.c` for .3dsx and `loader.c` for
+installed titles). An image over 64 MB overlaps it. Ours was 92.9 MB; Azahar
+does not enforce this.
+
+A CIA does not lift that limit (same loader path). Fix, now default on 3DS:
+on `PSX_LEAN_HOST` the three largest buffers (guest RAM 8 MB, mod GPU-DMA
+aperture 8 MB, interpreter PC table 12 MB) are heap-allocated before main,
+and diagnostic rings shrink 1/1024. Image 55.7 MB. Cost: game start 14.8 ->
+13.3 fps in Azahar (guest RAM through a pointer); to win back.
+
+A CIA may still be needed for memory: a .3dsx gets the Homebrew Launcher's
+memory setup, while a CIA can declare its own. A CIA must declare every
+service and memory mapping in its `.rsf` (e.g. DSP shared memory
+`1ff50000-1ff57fff`, `1ff70000-1ff77fff`, `1f000000-1f5fffff:r`; see
+https://ankush.one/blogs/nintendo-3ds-homebrew/).
+
 ## Roadmap: disc image format and disc-read cost
 
 Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
