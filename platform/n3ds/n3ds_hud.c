@@ -21,6 +21,37 @@
 #include "n3ds_hud.h"
 
 extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
+extern FILE *g_n3ds_log;         /* n3ds_platform.c; NULL unless enable-log.txt */
+void n3ds_log_flush(void);
+
+/* Ticks (268 MHz system timer, independent of the CPU clock) for a fixed
+ * loop of dependent instructions. */
+static u64 spin_ticks(void)
+{
+    u32 n = 4u * 1000u * 1000u;
+    const u64 t0 = svcGetSystemTick();
+    __asm__ volatile("1: subs %0, %0, #1\n\tbne 1b" : "+r"(n) :: "cc");
+    return svcGetSystemTick() - t0;
+}
+
+/* Is the New 3DS high-speed mode (804 MHz + L2) actually in effect? Time
+ * the same loop with the mode off and on; the ratio is ~3 when it works,
+ * ~1 when the request has no effect. Measured once, at the first tick. */
+static double s_cpu_ratio;
+static void measure_cpu_mode(void)
+{
+    const u64 fast1 = spin_ticks();
+    osSetSpeedupEnable(false);
+    const u64 slow = spin_ticks();
+    osSetSpeedupEnable(true);
+    const u64 fast2 = spin_ticks();
+    /* fast1 is the mode the game was actually running in. */
+    s_cpu_ratio = fast1 ? (double)slow / (double)fast1 : 0.0;
+    printf("thps2-n3ds: cpu check: loop %llu ticks in normal mode, %llu with speedup (first %llu); "
+           "ratio (normal / as running) %.2f -> %s (emulators: ignore)\n", (unsigned long long)slow, (unsigned long long)fast2,
+           (unsigned long long)fast1, s_cpu_ratio,
+           s_cpu_ratio > 2.5 ? "804 MHz mode active" : "speedup NOT in effect (268 MHz)");
+}
 
 int g_n3ds_gfx_ready = 0;
 
@@ -109,7 +140,7 @@ void n3ds_hud_tick(void)
     static u64 t0;
     static uint64_t f0;
     const u64 now = svcGetSystemTick();
-    if (!t0) { t0 = now; f0 = s_frame_count; return; }
+    if (!t0) { measure_cpu_mode(); t0 = svcGetSystemTick(); f0 = s_frame_count; return; }
     const double secs = (double)(now - t0) / (double)SYSCLOCK_ARM11;
     if (secs < 1.0) return;
     const double fps = (double)(s_frame_count - f0) / secs;
@@ -129,7 +160,16 @@ void n3ds_hud_tick(void)
     draw_text(fb, 12, 146, 3, WHITE, line);
     snprintf(line, sizeof line, "HEAP %lu/%lu MB", (unsigned long)(n3ds_heap_used() >> 20),
              (unsigned long)(envGetHeapSize() >> 20));
-    draw_text(fb, 12, 186, 3, WHITE, line);
+    draw_text(fb, 12, 180, 3, WHITE, line);
+    snprintf(line, sizeof line, "CPU %s (X%.1f)%s", s_cpu_ratio > 2.5 ? "804 MHZ" : "268 MHZ",
+             s_cpu_ratio, g_n3ds_log ? "   LOG ON" : "");
+    draw_text(fb, 12, 214, 2, s_cpu_ratio > 2.5 ? GREY : YELLOW, line);
+    if (g_n3ds_log) {
+        printf("thps2-n3ds: status fps=%.2f frame=%lu heap=%lu/%lu MB\n", fps,
+               (unsigned long)s_frame_count, (unsigned long)(n3ds_heap_used() >> 20),
+               (unsigned long)(envGetHeapSize() >> 20));
+        n3ds_log_flush();
+    }
     finish(fb);
 }
 

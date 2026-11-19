@@ -35,6 +35,13 @@
 #include "host_present.h"   /* psxrecomp: psx_host_present_register */
 #include "n3ds_hud.h"
 
+#ifndef THPS2_N3DS_BUILD
+#define THPS2_N3DS_BUILD "unknown"
+#endif
+#ifndef THPS2_N3DS_PSXRECOMP
+#define THPS2_N3DS_PSXRECOMP "unknown"
+#endif
+
 #ifndef THPS2_N3DS_DATA_DIR
 #define THPS2_N3DS_DATA_DIR "sdmc:/3ds/thps2"
 #endif
@@ -285,11 +292,34 @@ static void thps2_n3ds_note_exit(void)
     svcOutputDebugString(bye, sizeof(bye) - 1);
 }
 
+/* ---- Log file (opt-in) ----------------------------------------------------
+ * An empty file named enable-log.txt in the data folder makes everything the
+ * program prints (startup, [FPS] lines, errors) also go to log.txt there,
+ * along with a status line each second. Writes are buffered and flushed once
+ * a second and on a fatal error, so logging costs little. */
+FILE *g_n3ds_log;
+
+static ssize_t tee_write(struct _reent *r, void *fd, const char *ptr, size_t len)
+{
+    (void)r; (void)fd;
+    svcOutputDebugString(ptr, len);
+    if (g_n3ds_log) fwrite(ptr, 1, len, g_n3ds_log);
+    return (ssize_t)len;
+}
+
+static const devoptab_t k_tee = { .name = "tee", .structSize = 0, .write_r = tee_write };
+
+void n3ds_log_flush(void)
+{
+    if (g_n3ds_log) fflush(g_n3ds_log);
+}
+
 __attribute__((constructor))
 static void thps2_n3ds_process_setup(void)
 {
-    consoleDebugInit(debugDevice_SVC);            /* stderr -> svcOutputDebugString */
-    devoptab_list[STD_OUT] = devoptab_list[STD_ERR];
+    /* stdout and stderr -> svcOutputDebugString, and log.txt when enabled. */
+    devoptab_list[STD_OUT] = &k_tee;
+    devoptab_list[STD_ERR] = &k_tee;
     /* Not a terminal, so newlib would fully buffer: a hang or crash would
      * then lose exactly the lines that explain it. */
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -302,6 +332,21 @@ static void thps2_n3ds_process_setup(void)
     /* If the folder is missing, the runtime reports the missing game.toml /
      * BIOS / disc on its own; nothing to add here. */
     (void)chdir(THPS2_N3DS_DATA_DIR);
+
+    if (access("enable-log.txt", F_OK) == 0) {
+        g_n3ds_log = fopen("log.txt", "w");
+        if (g_n3ds_log) {
+            static char logbuf[64 * 1024];
+            setvbuf(g_n3ds_log, logbuf, _IOFBF, sizeof logbuf);
+            bool n3ds = false;
+            APT_CheckNew3DS(&n3ds);
+            printf("thps2-n3ds: log started; build %s (psxrecomp %s); %s; heap %lu MB, linear %lu MB\n",
+                   THPS2_N3DS_BUILD, THPS2_N3DS_PSXRECOMP, n3ds ? "New 3DS" : "Old 3DS",
+                   (unsigned long)(envGetHeapSize() >> 20), (unsigned long)(envGetLinearHeapSize() >> 20));
+            /* The runtime's once-a-second [FPS] line is the most useful entry. */
+            setenv("PSX_FPS_TELEMETRY", "1", 0);
+        }
+    }
 
     /* Opt-in: psx-env.txt in the data folder sets environment variables, one
      * KEY=VALUE per line ('#' starts a comment). A 3DS app has no shell, and

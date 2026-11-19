@@ -15,6 +15,9 @@
 
 #include "n3ds_hud.h"
 
+extern "C" FILE *g_n3ds_log;
+extern "C" void n3ds_log_flush(void);
+
 namespace {
 
 [[noreturn]] void n3ds_terminate()
@@ -38,6 +41,7 @@ namespace {
     char log[220];
     std::snprintf(log, sizeof log, "thps2-n3ds: %s: %s", title, detail);
     svcOutputDebugString(log, std::strlen(log));
+    if (g_n3ds_log) { std::fprintf(g_n3ds_log, "%s\n", log); n3ds_log_flush(); }
 
     /* Before the first present SDL may not have set up the screens yet. */
     if (!g_n3ds_gfx_ready) {

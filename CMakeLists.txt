@@ -71,8 +71,14 @@ if(NINTENDO_3DS)
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_platform.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_hud.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_fatal.cpp")
+    # Commit ids for the log header (log.txt names the exact build).
+    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE _thps2_rev OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${PSXRECOMP_ROOT}"
+                    OUTPUT_VARIABLE _psx_rev OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
     target_compile_definitions(psx-runtime PRIVATE
-        THPS2_N3DS_DATA_DIR="${THPS2_N3DS_DATA_DIR}")
+        THPS2_N3DS_DATA_DIR="${THPS2_N3DS_DATA_DIR}"
+        THPS2_N3DS_BUILD="${_thps2_rev}" THPS2_N3DS_PSXRECOMP="${_psx_rev}")
     # Scripted input (input-script.txt, platform/n3ds/n3ds_platform.c) is
     # ORed into the buttons SDL's 3DS joystick driver reads from libctru.
     target_link_options(psx-runtime PRIVATE

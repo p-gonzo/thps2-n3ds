@@ -155,6 +155,15 @@ on an error (for example running out of memory), the bottom screen says so and
 waits for START instead of closing silently. An empty file named `test-fatal`
 in `3ds/thps2/` triggers that screen at start-up, to check it.
 
+### Log file
+
+Put an empty file named `enable-log.txt` in `3ds/thps2/` on the SD card. The
+game then writes `3ds/thps2/log.txt`: the build it is, every message the
+runtime prints, its once-a-second frame-rate line, a status line each second,
+a one-time check of whether the New 3DS 804 MHz mode is in effect, and any
+fatal error. It is overwritten on each launch; delete `enable-log.txt` to turn
+it off.
+
 ### Testing in Azahar
 
 `tools/azahar_run.py` closes any running Azahar, starts the staged game,
