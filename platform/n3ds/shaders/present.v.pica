@@ -1,0 +1,21 @@
+; Top-screen present: a screen-space quad carrying the PS1 frame texture.
+; PICA rules (CTR-3D, docs/N3DS_GPU_RENDERER.md): projection[4] is the first
+; uniform, every output component is written, and the uniform is dp4's FIRST
+; operand. Both attributes arrive as 4 floats, so the moves are complete.
+
+.fvec projection[4]
+
+.out outpos position
+.out outtc0 texcoord0
+
+.alias inpos v0   ; (x, y, z, 1) in top-screen pixels, y down
+.alias intc  v1   ; (u, v, 0, 1)
+
+.proc main
+    dp4 outpos.x, projection[0], inpos
+    dp4 outpos.y, projection[1], inpos
+    dp4 outpos.z, projection[2], inpos
+    dp4 outpos.w, projection[3], inpos
+    mov outtc0, intc
+    end
+.end

@@ -70,6 +70,7 @@ if(NINTENDO_3DS)
     target_sources(psx-runtime PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_platform.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_hud.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_gpu.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_fatal.cpp")
     # Commit ids for the log header (log.txt names the exact build).
     execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -83,6 +84,12 @@ if(NINTENDO_3DS)
     # ORed into the buttons SDL's 3DS joystick driver reads from libctru.
     target_link_options(psx-runtime PRIVATE
         "LINKER:--wrap=hidKeysDown" "LINKER:--wrap=hidKeysUp" "LINKER:--wrap=hidKeysHeld")
+    # PICA200 shaders (picasso), embedded as <name>_shbin / _shbin_size.
+    ctr_add_shader_library(thps2_present_shader
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/shaders/present.v.pica"
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/present.shbin")
+    dkp_add_embedded_binary_library(thps2_shaders thps2_present_shader)
+    target_link_libraries(psx-runtime PRIVATE thps2_shaders citro3d)
     ctr_generate_smdh(thps2.smdh
         NAME "THPS2 Recompiled"
         DESCRIPTION "Tony Hawk's Pro Skater 2 static recompilation (your own disc)"

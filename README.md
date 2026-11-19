@@ -155,6 +155,16 @@ on an error (for example running out of memory), the bottom screen says so and
 waits for START instead of closing silently. An empty file named `test-fatal`
 in `3ds/thps2/` triggers that screen at start-up, to check it.
 
+### Picture
+
+The game is shown at its original 4:3 shape: 320x240 in the middle of the
+400x240 top screen, with black bars at the sides. It is never stretched. The
+GPU (citro3d) draws it; `THPS2_PRESENT=cpu` in `3ds/thps2/psx-env.txt`
+switches back to the older CPU copy for comparisons.
+`THPS2_SNAPSHOTS=<frame>,...` in the same file saves, at each listed guest
+frame, `snap_<frame>.bmp` (the PS1 frame) and `screen_<frame>.bmp` (the whole
+top screen as shown).
+
 ### Log file
 
 Put an empty file named `enable-log.txt` in `3ds/thps2/` on the SD card. The

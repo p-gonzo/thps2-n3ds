@@ -1,7 +1,12 @@
 # PICA200 renderer for the THPS2 3DS port: design
 
-Status: Phase 0 done (2026-11-19): the design holds for THPS2, see
-"Phase 0 results". Phase 1 next.
+Status: Phase 1 done in Azahar (2026-11-19), hardware check pending; Phase 2
+next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
+
+**Aspect ratio rule:** the PS1 picture is always shown at 4:3, 320x240
+centred on the 400x240 top screen with black bars. Nothing is ever stretched
+to fill the screen. True widescreen (rendering more of the scene) is a later,
+separate roadmap item.
 
 ## Why
 
@@ -97,6 +102,20 @@ gameplay. If readbacks are frequent, revisit before Phase 1.
 setup; the existing presenter switches to a citro3d top-screen target fed
 from the CPU frame (same output as today, now through the GPU path).
 Registration hook in psxrecomp. Gate: identical frames, no fps loss.
+
+*Done (2026-11-19):* `platform/n3ds/n3ds_gpu.c` + `shaders/present.v.pica`.
+citro3d starts on the first present (after SDL's gfxInit); the frame goes to
+a VRAM texture (CPU ARGB->RGBA8 into a linear staging image, then a GX
+display transfer) and a 320x240 quad on a 400x240 target. Nearest sampling
+with coordinates shifted half an output pixel picks exactly the CPU
+presenter's source pixels (an epsilon of 1/1024 pixel was below the PICA's
+texture-coordinate precision and picked the column to the left; 1/32 is
+safe for every PS1 width). Results in Azahar, GPU vs CPU presenter
+(`THPS2_PRESENT=cpu`), comparing what is actually on the top screen
+(`screen_<frame>.bmp`): 0 differing pixels at the 640x478 BIOS screen, the
+320x240 intro video, the menu and four gameplay frames; gameplay 9.35 fps
+both ways. No psxrecomp hook was needed: the existing host-present
+registration carries the frame. Hardware fps check pending.
 
 **Phase 2 - untextured primitives on the GPU.** Flat/gouraud triangles,
 rects, lines and fills into display buffers; ordering, draw area (scissor),

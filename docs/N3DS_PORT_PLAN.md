@@ -486,6 +486,8 @@ THPS2 simulates at ~30 fps on PS1. Two separate goals:
 2. **In-game**: static overlays, CD reads from `sdmc:`, pad input, menu loads.
 3. **Audio**: SPU output through ndsp on core 3.
 4. **Speed**: profile on hardware; citro3d renderer on core 2; full speed.
-5. **Presentation**: widescreen option, stereoscopic 3D, bottom-screen UI.
+5. **Presentation**: true widescreen option (renders more of the scene; the
+   default stays the original 4:3 picture, never stretched), stereoscopic 3D,
+   bottom-screen UI.
 6. **60 fps**: interpolated presentation, then evaluate native 60 Hz patches.
 7. **Packaging**: CIA (full New 3DS app memory), release workflow.

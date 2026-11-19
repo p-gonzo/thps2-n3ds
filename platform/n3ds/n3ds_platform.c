@@ -33,6 +33,9 @@
 #include <unwind.h>   /* _Unwind_Ptr */
 
 #include "host_present.h"   /* psxrecomp: psx_host_present_register */
+#include "n3ds_gpu.h"
+
+extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
 #include "n3ds_hud.h"
 
 #ifndef THPS2_N3DS_BUILD
@@ -94,13 +97,14 @@ u32 __ctru_linear_heap_size = 8u * 1024u * 1024u;
  * the common 320x240 mode copies 1:1; other modes (256/368/512/640 wide,
  * 480i) are sampled nearest-neighbour into it. Only the RGBA8 format SDL
  * sets up is handled; anything else declines and SDL presents as before. */
-static void snapshot_maybe(const uint32_t *argb, int w, int h, int pitch);   /* below */
+static int snapshot_maybe(const uint32_t *argb, int w, int h, int pitch);   /* below */
+static void screen_snapshot_write(const uint32_t *rotated_rgba, uint32_t frame);
+static uint32_t s_screen_snap_frame;   /* nonzero: also save the top screen */
 
-static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int pin_43)
+/* Original CPU presenter: nearest-neighbour into the rotated framebuffer.
+ * Kept as the fallback and for A/B checks (THPS2_PRESENT=cpu). */
+static int present_top_cpu(const uint32_t *argb, int w, int h, int pitch)
 {
-    (void)pin_43;   /* no widescreen yet: every frame is shown 4:3 */
-    if (!argb || w <= 0 || h <= 0 || pitch < w) return 0;
-    snapshot_maybe(argb, w, h, pitch);
     if (gfxGetScreenFormat(GFX_TOP) != GSP_RGBA8_OES) return 0;
     u16 rows = 0, cols = 0;   /* 240 x 400: the framebuffer is rotated */
     u32 *fb = (u32 *)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, &rows, &cols);
@@ -122,11 +126,53 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
             dst[-y] = (src[(size_t)src_row[y] * (size_t)pitch] << 8) | 0xFFu;  /* ARGB -> RGBA */
     }
     GSPGPU_FlushDataCache(fb, (u32)rows * cols * 4u);
+    if (s_screen_snap_frame) {
+        screen_snapshot_write(fb, s_screen_snap_frame);
+        s_screen_snap_frame = 0;
+    }
     gfxScreenSwapBuffers(GFX_TOP, false);
-    g_n3ds_gfx_ready = 1;
-    n3ds_hud_tick();      /* bottom-screen counter, redrawn once a second */
     gspWaitForVBlank();   /* the driver vsync the SDL path would have waited on */
     return 1;
+}
+
+/* Every PS1 frame is shown at 4:3 (320x240 centred on the 400x240 screen),
+ * by the GPU (n3ds_gpu.c) unless THPS2_PRESENT=cpu or citro3d is unavailable.
+ * pin_43 is ignored: nothing is ever stretched; widescreen is future work. */
+static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int pin_43)
+{
+    (void)pin_43;
+    if (!argb || w <= 0 || h <= 0 || pitch < w) return 0;
+    static int use_cpu = -1;
+    if (use_cpu < 0) {
+        const char *e = getenv("THPS2_PRESENT");
+        use_cpu = e && strcmp(e, "cpu") == 0;
+        if (use_cpu) printf("thps2-n3ds: THPS2_PRESENT=cpu: CPU presenter\n");
+    }
+    if (snapshot_maybe(argb, w, h, pitch)) s_screen_snap_frame = (uint32_t)s_frame_count;
+    int ok;
+    if (!use_cpu && n3ds_gpu_present(argb, w, h, pitch)) {
+        if (s_screen_snap_frame) {
+            static uint32_t shot[400 * 240];
+            if (n3ds_gpu_capture_top(shot)) {
+                /* The capture is already y-down ARGB; store it rotated like
+                 * the CPU path so both share one writer. */
+                static uint32_t rot[400 * 240];
+                for (int y = 0; y < 240; y++)
+                    for (int x = 0; x < 400; x++)
+                        rot[x * 240 + (239 - y)] = shot[y * 400 + x] << 8;
+                screen_snapshot_write(rot, s_screen_snap_frame);
+            }
+            s_screen_snap_frame = 0;
+        }
+        ok = 1;
+    } else {
+        ok = present_top_cpu(argb, w, h, pitch);
+    }
+    if (ok) {
+        g_n3ds_gfx_ready = 1;
+        n3ds_hud_tick();      /* bottom-screen counter, redrawn once a second */
+    }
+    return ok;
 }
 
 /* ---- Scripted input and frame snapshots (opt-in testing aids) -------------
@@ -144,7 +190,6 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
  * THPS2_SNAPSHOTS=<frame>[,<frame>...] (psx-env.txt) saves the presented
  * frame as snap_<frame>.bmp in the data folder the first time each frame is
  * shown, so a scripted run can be checked without watching it. */
-extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
 
 typedef struct { uint32_t frame, hold, keys; } ScriptPress;
 static ScriptPress *s_script;
@@ -246,10 +291,10 @@ static void snapshots_load(void)
 }
 
 /* 24-bit bottom-up BMP of the ARGB frame. */
-static void snapshot_write(const uint32_t *argb, int w, int h, int pitch, uint32_t frame)
+static void snapshot_write_named(const uint32_t *argb, int w, int h, int pitch, const char *base)
 {
     char name[48];
-    snprintf(name, sizeof name, "snap_%lu.bmp", (unsigned long)frame);
+    snprintf(name, sizeof name, "%s.bmp", base);
     FILE *f = fopen(name, "wb");
     if (!f) return;
     const uint32_t row = ((uint32_t)w * 3u + 3u) & ~3u, size = 54u + row * (uint32_t)h;
@@ -273,15 +318,39 @@ static void snapshot_write(const uint32_t *argb, int w, int h, int pitch, uint32
     printf("thps2-n3ds: snapshot %s (%dx%d)\n", name, w, h);
 }
 
-static void snapshot_maybe(const uint32_t *argb, int w, int h, int pitch)
+static void snapshot_write(const uint32_t *argb, int w, int h, int pitch, uint32_t frame)
+{
+    char base[32];
+    snprintf(base, sizeof base, "snap_%lu", (unsigned long)frame);
+    snapshot_write_named(argb, w, h, pitch, base);
+}
+
+static int snapshot_maybe(const uint32_t *argb, int w, int h, int pitch)
 {
     const uint64_t f = s_frame_count;
+    int taken = 0;
     for (unsigned i = 0; i < s_snap_n; i++) {
         if (s_snap_frames[i] && f >= s_snap_frames[i]) {
-            snapshot_write(argb, w, h, pitch, (uint32_t)f);
+            if (!taken) snapshot_write(argb, w, h, pitch, (uint32_t)f);
             s_snap_frames[i] = 0;   /* once each */
+            taken = 1;
         }
     }
+    return taken;
+}
+
+/* screen_<frame>.bmp: the whole 400x240 top screen as the player sees it
+ * (black bars included), from a rotated RGBA8 buffer laid out like the
+ * panel's framebuffer: screen (x, y) at [x * 240 + (239 - y)]. */
+static void screen_snapshot_write(const uint32_t *rotated_rgba, uint32_t frame)
+{
+    static uint32_t img[400 * 240];
+    for (int y = 0; y < 240; y++)
+        for (int x = 0; x < 400; x++)
+            img[y * 400 + x] = rotated_rgba[x * 240 + (239 - y)] >> 8;
+    char name[48];
+    snprintf(name, sizeof name, "screen_%lu", (unsigned long)frame);
+    snapshot_write_named(img, 400, 240, 400, name);
 }
 
 /* One line at process exit, so a run that ends without a message from the
