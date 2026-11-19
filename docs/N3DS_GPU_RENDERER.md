@@ -1,6 +1,6 @@
 # PICA200 renderer for the THPS2 3DS port: design
 
-Status: Phase 1 done (2026-11-19, Azahar and hardware); Phase 2 next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
+Status: Phases 1 and 2 done (2026-11-19); Phase 3 (textures) next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
 
 **Aspect ratio rule:** the PS1 picture is always shown at 4:3, 320x240
 centred on the 400x240 top screen with black bars. Nothing is ever stretched
@@ -127,6 +127,40 @@ rects, lines and fills into display buffers; ordering, draw area (scissor),
 draw offset, the four blend modes, mask bit. Everything else CPU. Gate: menus
 and gameplay frames match the software renderer except for documented
 rasterisation-rule differences (edge pixels).
+
+*Done (2026-11-19) as a shadow renderer.* Splitting one frame between a GPU
+painter (untextured) and a CPU painter (textured) would need a sync at every
+switch, so until Phase 3 the software renderer still draws and presents
+everything, and the GPU draws in parallel into its own copy of VRAM:
+
+- psxrecomp: `gr_set_host_tap()` (gpu_render.c) hands every renderer call to
+  the platform after the backend ran it. Diagnostics for comparisons:
+  `PSX_GR_SKIP_TEXTURED=1` drops textured primitives in every renderer;
+  `PSX_GR_TEXTURED_AS_SHADES=1` redraws them as gouraud shapes coloured per
+  texture page and lit by the vertex colours, so the full geometry, overlaps
+  and blending can be compared without textures.
+- 3DS: `platform/n3ds/n3ds_gpu_shadow.c` + `shaders/draw.v.pica`, enabled by
+  `THPS2_GPU_SHADOW=1`. Primitives are batched per (blend mode, draw area) in
+  a double-buffered linear vertex buffer and drawn at present time, in
+  submission order, into a 1024x512 **RGBA5551** texture/target (5 bits per
+  channel like the PS1: stacked additive layers then round like the
+  software path; alpha holds the mask bit). Draw area = scissor; vertices
+  get +0.5 so GPU pixel centres sample where the PS1 rules do; rectangles and
+  fills sit on pixel edges. Blend: B/2+F/2 constant alpha 0.5; B+F one/one;
+  B-F reverse subtract; B+F/4 constant alpha 0.25. Snapshots add
+  `gpu_<frame>.bmp` (the GPU copy of the displayed buffer).
+- What THPS2 uses (scripted boot into The Hangar): 210k triangles (12.5k
+  gouraud), 142k rectangles, 1.8k fills; opaque, B+F (11.8k) and B-F (84k)
+  blending; mask bit never; lines never; 2 copies (the menu frame grabs).
+- Results in Azahar, GPU copy vs software frame, 5-bit channels: no missing
+  or extra primitives and no coverage differences. With
+  `PSX_GR_TEXTURED_AS_SHADES=1`: menus 98-100% exact (character select:
+  2,272 pixels 1 step, 272 at 2, 8 beyond); gameplay ~55% exact, ~45% one
+  step, <0.7% two steps, ~0.01% more. The steps are gouraud rounding: the
+  software path interpolates in 5-bit steps (visible banding), the GPU in
+  8 bits stored as 5. Neither is the PS1's 8-bit interpolation with
+  dithering; matching that is a later fidelity item, not a structural bug.
+- Not mirrored yet (Phase 4): VRAM uploads and copies into display buffers.
 
 **Phase 3 - textured primitives.** CPU decode cache for 4/8/15-bit textures
 with CLUT and texture window, keyed and invalidated as above; modulation x2,

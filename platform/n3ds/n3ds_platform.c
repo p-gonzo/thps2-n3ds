@@ -34,6 +34,8 @@
 
 #include "host_present.h"   /* psxrecomp: psx_host_present_register */
 #include "n3ds_gpu.h"
+#include "n3ds_gpu_shadow.h"
+#include "gpu.h"          /* psxrecomp: gpu_get_display_info */
 
 extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
 #include "n3ds_hud.h"
@@ -100,6 +102,7 @@ u32 __ctru_linear_heap_size = 8u * 1024u * 1024u;
  * sets up is handled; anything else declines and SDL presents as before. */
 static int snapshot_maybe(const uint32_t *argb, int w, int h, int pitch);   /* below */
 static void screen_snapshot_write(const uint32_t *rotated_rgba, uint32_t frame);
+static void snapshot_write_named(const uint32_t *argb, int w, int h, int pitch, const char *base);
 static uint32_t s_screen_snap_frame;   /* nonzero: also save the top screen */
 
 /* Original CPU presenter: nearest-neighbour into the rotated framebuffer.
@@ -162,6 +165,16 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
                     for (int x = 0; x < 400; x++)
                         rot[x * 240 + (239 - y)] = shot[y * 400 + x] << 8;
                 screen_snapshot_write(rot, s_screen_snap_frame);
+            }
+            /* Phase 2: the GPU's copy of the displayed buffer, same size as snap_. */
+            GpuDisplayInfo di;
+            gpu_get_display_info(&di);
+            static uint32_t gbuf[1024 * 512];
+            if (n3ds_shadow_enabled() &&
+                n3ds_shadow_capture((int)di.display_x, (int)di.display_y, w, h, gbuf)) {
+                char base[32];
+                snprintf(base, sizeof base, "gpu_%lu", (unsigned long)s_screen_snap_frame);
+                snapshot_write_named(gbuf, w, h, w, base);
             }
             s_screen_snap_frame = 0;
         }
@@ -438,6 +451,7 @@ static void thps2_n3ds_process_setup(void)
         fclose(env);
     }
 
+    n3ds_shadow_install();   /* THPS2_GPU_SHADOW=1: Phase 2 GPU shadow renderer */
     script_load();      /* input-script.txt, if present */
     snapshots_load();   /* THPS2_SNAPSHOTS, if set */
 

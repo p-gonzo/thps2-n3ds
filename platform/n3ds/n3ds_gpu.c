@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "n3ds_gpu_shadow.h"
 #include "present_shbin.h"   /* built from shaders/present.v.pica by picasso */
 
 /* The PS1 picture keeps its 4:3 shape: 320x240 in the middle of the 400x240
@@ -155,6 +156,7 @@ int n3ds_gpu_present(const uint32_t *argb, int w, int h, int pitch)
     const float x0 = (float)OUT_X, x1 = (float)(OUT_X + OUT_W);
 
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    n3ds_shadow_render();   /* Phase 2: this frame's untextured primitives */
     C3D_RenderTargetClear(s_top, C3D_CLEAR_ALL, 0x000000FF, 0);
     C3D_FrameDrawOn(s_top);
     set_state();

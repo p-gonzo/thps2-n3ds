@@ -71,6 +71,7 @@ if(NINTENDO_3DS)
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_platform.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_hud.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_gpu.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_gpu_shadow.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_fatal.cpp")
     # Commit ids for the log header (log.txt names the exact build): taken
     # at build time by cmake/n3ds_build_id.cmake, so they never go stale.
@@ -93,7 +94,10 @@ if(NINTENDO_3DS)
     ctr_add_shader_library(thps2_present_shader
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/shaders/present.v.pica"
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/present.shbin")
-    dkp_add_embedded_binary_library(thps2_shaders thps2_present_shader)
+    ctr_add_shader_library(thps2_draw_shader
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/shaders/draw.v.pica"
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/draw.shbin")
+    dkp_add_embedded_binary_library(thps2_shaders thps2_present_shader thps2_draw_shader)
     target_link_libraries(psx-runtime PRIVATE thps2_shaders citro3d)
     ctr_generate_smdh(thps2.smdh
         NAME "THPS2 Recompiled"

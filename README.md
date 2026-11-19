@@ -165,6 +165,12 @@ switches back to the older CPU copy for comparisons.
 frame, `snap_<frame>.bmp` (the PS1 frame) and `screen_<frame>.bmp` (the whole
 top screen as shown).
 
+GPU renderer development switches (same file): `THPS2_GPU_SHADOW=1` also
+draws untextured primitives on the GPU into its own copy of VRAM (saved as
+`gpu_<frame>.bmp` with snapshots; the screen still shows the software
+renderer). `PSX_GR_TEXTURED_AS_SHADES=1` replaces textures with flat colours
+in every renderer, so the two can be compared. Neither is for playing.
+
 ### Log file
 
 Put an empty file named `enable-log.txt` in `3ds/thps2/` on the SD card. The

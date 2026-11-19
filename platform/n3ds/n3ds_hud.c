@@ -18,6 +18,7 @@
 #include <string.h>
 #include <malloc.h>
 
+#include "n3ds_gpu_shadow.h"
 #include "n3ds_hud.h"
 
 extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
@@ -170,6 +171,11 @@ void n3ds_hud_tick(void)
         printf("thps2-n3ds: status fps=%.2f frame=%lu heap=%lu/%lu MB\n", fps,
                (unsigned long)s_frame_count, (unsigned long)(n3ds_heap_used() >> 20),
                (unsigned long)(envGetHeapSize() >> 20));
+        if (n3ds_shadow_enabled()) {
+            char sh[320];
+            n3ds_shadow_status(sh, sizeof sh);
+            printf("thps2-n3ds: shadow %s\n", sh);
+        }
         n3ds_log_flush();
     }
     finish(fb);
