@@ -72,14 +72,19 @@ if(NINTENDO_3DS)
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_hud.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_gpu.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/platform/n3ds/n3ds_fatal.cpp")
-    # Commit ids for the log header (log.txt names the exact build).
-    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-                    OUTPUT_VARIABLE _thps2_rev OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY "${PSXRECOMP_ROOT}"
-                    OUTPUT_VARIABLE _psx_rev OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    # Commit ids for the log header (log.txt names the exact build): taken
+    # at build time by cmake/n3ds_build_id.cmake, so they never go stale.
+    set(_thps2_id_dir "${CMAKE_CURRENT_BINARY_DIR}/build_id")
+    add_custom_target(thps2_build_id ALL
+        COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_CURRENT_SOURCE_DIR} -DPSX=${PSXRECOMP_ROOT}
+                -DOUT=${_thps2_id_dir}/thps2_build_id.h
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/n3ds_build_id.cmake
+        BYPRODUCTS ${_thps2_id_dir}/thps2_build_id.h
+        COMMENT "Recording build id")
+    add_dependencies(psx-runtime thps2_build_id)
+    target_include_directories(psx-runtime PRIVATE ${_thps2_id_dir})
     target_compile_definitions(psx-runtime PRIVATE
-        THPS2_N3DS_DATA_DIR="${THPS2_N3DS_DATA_DIR}"
-        THPS2_N3DS_BUILD="${_thps2_rev}" THPS2_N3DS_PSXRECOMP="${_psx_rev}")
+        THPS2_N3DS_DATA_DIR="${THPS2_N3DS_DATA_DIR}")
     # Scripted input (input-script.txt, platform/n3ds/n3ds_platform.c) is
     # ORed into the buttons SDL's 3DS joystick driver reads from libctru.
     target_link_options(psx-runtime PRIVATE

@@ -38,6 +38,7 @@
 extern uint64_t s_frame_count;   /* psxrecomp: guest frames since boot */
 #include "n3ds_hud.h"
 
+#include "thps2_build_id.h"   /* build-time commit ids (cmake/n3ds_build_id.cmake) */
 #ifndef THPS2_N3DS_BUILD
 #define THPS2_N3DS_BUILD "unknown"
 #endif

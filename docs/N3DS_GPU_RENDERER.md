@@ -1,7 +1,6 @@
 # PICA200 renderer for the THPS2 3DS port: design
 
-Status: Phase 1 done in Azahar (2026-11-19), hardware check pending; Phase 2
-next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
+Status: Phase 1 done (2026-11-19, Azahar and hardware); Phase 2 next. Phase 0 showed the design holds for THPS2 ("Phase 0 results").
 
 **Aspect ratio rule:** the PS1 picture is always shown at 4:3, 320x240
 centred on the 400x240 top screen with black bars. Nothing is ever stretched
@@ -115,7 +114,13 @@ safe for every PS1 width). Results in Azahar, GPU vs CPU presenter
 (`screen_<frame>.bmp`): 0 differing pixels at the 640x478 BIOS screen, the
 320x240 intro video, the menu and four gameplay frames; gameplay 9.35 fps
 both ways. No psxrecomp hook was needed: the existing host-present
-registration carries the frame. Hardware fps check pending.
+registration carries the frame.
+
+Hardware (New 3DS, 2026-11-19, Hangar save state): gameplay median 5.20 fps,
+the same as the 5.2 fps CPU-presenter baseline; `screen_600.bmp` shows the
+picture in columns 40-359 of 400 (4:3, not stretched). A Rosalina profile put
+`n3ds_gpu_present` at ~5% of the game thread (its CPU colour conversion; the
+runtime's own ARGB scan-out is another ~5%; both go away in Phase 3).
 
 **Phase 2 - untextured primitives on the GPU.** Flat/gouraud triangles,
 rects, lines and fills into display buffers; ordering, draw area (scissor),
