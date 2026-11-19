@@ -108,6 +108,14 @@ if(NINTENDO_3DS)
         NAME "THPS2 Recompiled"
         DESCRIPTION "Tony Hawk's Pro Skater 2 static recompilation (your own disc)"
         AUTHOR "thps2-n3ds")
+    # Program image budget (cmake/n3ds_image_size.cmake): 64 MB is a hard
+    # limit on hardware; keep a margin.
+    get_filename_component(_thps2_tool_dir "${CMAKE_C_COMPILER}" DIRECTORY)
+    add_custom_command(TARGET psx-runtime POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -DSIZE=${_thps2_tool_dir}/arm-none-eabi-size
+                -DELF=$<TARGET_FILE:psx-runtime> -DLIMIT_MB=60
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/n3ds_image_size.cmake
+        VERBATIM)
     ctr_create_3dsx(psx-runtime OUTPUT thps2.3dsx SMDH thps2.smdh)
 
     # Optional extra flags for the recompiled game and BIOS code only (about

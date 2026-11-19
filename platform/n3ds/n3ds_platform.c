@@ -105,6 +105,13 @@ u32 __ctru_linear_heap_size = 16u * 1024u * 1024u;
 static int snapshot_maybe(const uint32_t *argb, int w, int h, int pitch);   /* below */
 static void screen_snapshot_write(const uint32_t *rotated_rgba, uint32_t frame);
 static uint32_t s_snap_frames[16];   /* THPS2_SNAPSHOTS guest frames, 0 = taken */
+/* Snapshot scratch buffers come from the heap on first use: as static arrays
+ * they were 6 MB of the program image, which the 3DS loader caps at 64 MB. */
+static uint32_t *snap_alloc(uint32_t **slot, size_t pixels)
+{
+    if (!*slot) *slot = malloc(pixels * sizeof(uint32_t));
+    return *slot;
+}
 static unsigned s_snap_n;
 static void snapshot_write_named(const uint32_t *argb, int w, int h, int pitch, const char *base);
 static uint32_t s_screen_snap_frame;   /* nonzero: also save the top screen */
@@ -154,14 +161,14 @@ static int n3ds_present_vram(int x, int y, int w, int h, int depth24)
     for (unsigned i = 0; i < s_snap_n; i++)
         if (s_snap_frames[i] && f >= s_snap_frames[i]) { s_snap_frames[i] = 0; snap = 1; }
     if (snap) {
-        static uint32_t gbuf[1024 * 512];
+        static uint32_t *gbuf;
         char base[32];
-        if (n3ds_shadow_capture(x, y, w, h, gbuf)) {
+        if (snap_alloc(&gbuf, 1024 * 512) && n3ds_shadow_capture(x, y, w, h, gbuf)) {
             snprintf(base, sizeof base, "gpu_%lu", (unsigned long)f);
             snapshot_write_named(gbuf, w, h, w, base);
         }
-        static uint32_t shot[400 * 240], rot[400 * 240];
-        if (n3ds_gpu_capture_top(shot)) {
+        static uint32_t *shot, *rot;
+        if (snap_alloc(&shot, 400 * 240) && snap_alloc(&rot, 400 * 240) && n3ds_gpu_capture_top(shot)) {
             for (int yy = 0; yy < 240; yy++)
                 for (int xx = 0; xx < 400; xx++)
                     rot[xx * 240 + (239 - yy)] = shot[yy * 400 + xx] << 8;
@@ -190,11 +197,10 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
     int ok;
     if (!use_cpu && n3ds_gpu_present(argb, w, h, pitch)) {
         if (s_screen_snap_frame) {
-            static uint32_t shot[400 * 240];
-            if (n3ds_gpu_capture_top(shot)) {
+            static uint32_t *shot, *rot;
+            if (snap_alloc(&shot, 400 * 240) && snap_alloc(&rot, 400 * 240) && n3ds_gpu_capture_top(shot)) {
                 /* The capture is already y-down ARGB; store it rotated like
                  * the CPU path so both share one writer. */
-                static uint32_t rot[400 * 240];
                 for (int y = 0; y < 240; y++)
                     for (int x = 0; x < 400; x++)
                         rot[x * 240 + (239 - y)] = shot[y * 400 + x] << 8;
@@ -203,8 +209,8 @@ static int n3ds_present_top(const uint32_t *argb, int w, int h, int pitch, int p
             /* Phase 2: the GPU's copy of the displayed buffer, same size as snap_. */
             GpuDisplayInfo di;
             gpu_get_display_info(&di);
-            static uint32_t gbuf[1024 * 512];
-            if (n3ds_shadow_enabled() &&
+            static uint32_t *gbuf;
+            if (n3ds_shadow_enabled() && snap_alloc(&gbuf, 1024 * 512) &&
                 n3ds_shadow_capture((int)di.display_x, (int)di.display_y, w, h, gbuf)) {
                 char base[32];
                 snprintf(base, sizeof base, "gpu_%lu", (unsigned long)s_screen_snap_frame);
@@ -390,7 +396,8 @@ static int snapshot_maybe(const uint32_t *argb, int w, int h, int pitch)
  * panel's framebuffer: screen (x, y) at [x * 240 + (239 - y)]. */
 static void screen_snapshot_write(const uint32_t *rotated_rgba, uint32_t frame)
 {
-    static uint32_t img[400 * 240];
+    static uint32_t *img;
+    if (!snap_alloc(&img, 400 * 240)) return;
     for (int y = 0; y < 240; y++)
         for (int x = 0; x < 400; x++)
             img[y * 400 + x] = rotated_rgba[x * 240 + (239 - y)] >> 8;

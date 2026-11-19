@@ -465,6 +465,24 @@ memory path (pointer-based RAM since the 64 MB image fix, store
 bookkeeping), SPU mixing off the game thread (another core; its guest-visible
 state must stay on the game thread), block-edge cost, GTE, dispatch checks.
 
+## Lean execution profile (started 2026-11-19)
+
+Goal: cut what psxrecomp's faithful core costs per guest instruction on the
+3DS without changing emulation. Verification for every stage: the Mac
+build with the same options (`build-dbg3ds`) saves the machine state at
+frame 7000 of the scripted run; it must be byte-identical to the previous
+stage's (header aside), and Azahar frames must match pixel for pixel.
+
+| Stage | Change | Azahar fps (Hangar, GPU) |
+|---|---|---|
+| baseline | GPU renderer | 17.01 |
+| 1 | `PSX_DIRECT_GUEST_MEMORY` on (inline stores), `PSX_HEADROOM_COUNTERS` off, per-access memory counters and inline write history compiled out on lean hosts | 18.39 |
+| 2 | Inline block-edge horizon: one 64-bit compare per edge, full edge only at the next deadline/sample or when something is pending (psxrecomp `g_psx_edge_horizon`) | 19.7 |
+
+Both stages left the frame-7000 machine state byte-identical. The program
+image is checked at build time against a 60 MB budget
+(`cmake/n3ds_image_size.cmake`; 64 MB is Luma's hard limit): 56.7 MB.
+
 ## Roadmap: disc image format and disc-read cost
 
 Requested 2026-11-18: check whether the compressed CHD (vs a raw BIN/ISO)
