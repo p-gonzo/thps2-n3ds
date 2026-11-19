@@ -1,7 +1,7 @@
 # PICA200 renderer for the THPS2 3DS port: design
 
-Status: design, nothing implemented. Written 2026-11-19 after the first
-hardware gameplay profile.
+Status: Phase 0 done (2026-11-19): the design holds for THPS2, see
+"Phase 0 results". Phase 1 next.
 
 ## Why
 
@@ -85,7 +85,7 @@ measured first (Phase 0) rather than assumed.
 
 ## Phases (each ends measured on hardware, frames compared)
 
-**Phase 0 - measure THPS2's VRAM behaviour (Mac, a few hours).** A recording
+**Phase 0 - measure THPS2's VRAM behaviour (Mac). Done; results below.** A recording
 wrapper around the software backend counts, per frame: draw-area targets and
 how many primitives each gets, which regions get displayed, texture pages
 sampled from regions drawn earlier, `copy_rect`/`vram_transfer_out` touching
@@ -115,6 +115,47 @@ regions, FMV, the pause/feedback effects THPS2 uses (Phase 0 tells which).
 **Phase 5 - move work off the game thread.** Vertex building and GPU
 submission on a render worker on core 2 (CTR-3D's layout), and only then the
 GTE question.
+
+## Phase 0 results (2026-11-19)
+
+Tool: psxrecomp's `vram_census` debug-server command (`gpu_vram_census.c`,
+inert until armed) driven by `tools/vram_census.py` along the scripted path
+into The Hangar (Mac debug build, software renderer). It simulates the
+ownership model above on 16x16 cells; raw output in `out/census.json`.
+
+| Window (guest frames) | Presents | Shown from GPU | Primitives | Readbacks |
+|---|---|---|---|---|
+| Sony logo (130-200) | 70 | 70 | 186 | 0 |
+| Game start (790-1000) | 66 | 11 (rest CPU: boot screens) | 4 | 1 (one full-VRAM clear) |
+| Intro FMV (1200-1700) | 500 | 0 (24-bit MDEC, CPU) | 0 | 0 |
+| Menus (1800-3200) | 1400 | 1379 | 45,388 | 0 |
+| Menus + loading (3300-6500) | 3200 | 1919 (+1182 partly CPU) | 446,958 | 4 (124 cells) |
+| Gameplay (7000-7400) | 400 | 400 | 264,860 | 0 |
+| Gameplay (7400-9000) | 1600 | 1600 | 1,128,439 | 0 |
+
+What it means:
+
+- **Every primitive in menus and gameplay is drawn into the two display
+  buffers**, (0,0) and (0,256), 512x240, alternating. THPS2 does no
+  render-to-texture: no draw samples a region drawn earlier, no copy or
+  GPUREAD pulls drawn pixels back during gameplay. The only readbacks in the
+  whole run are two 176x48 framebuffer grabs in the menus (copied to
+  (703,256)) and a full-VRAM clear at boot.
+- So the GPU can own both display buffers for the whole of gameplay with zero
+  CPU synchronisation, and the CPU rasteriser is needed only for those rare
+  cases (handled by Phase 4's readback path, not a second renderer).
+- Workload: the game renders at 30 fps (one fill/clear every two vblanks), so
+  a rendered frame has **~1,400 primitives, 64% textured**. Small for the
+  PICA200; the cost will be CPU-side vertex building and texture decode.
+- The one per-frame VRAM copy is a 2x1 copy of (0,0) onto itself (a no-op
+  idiom); it needs no GPU work.
+- Presentation: 512 wide onto the 400-pixel top screen. The PICA200 can draw
+  straight into a 400x240 target with a horizontal 400/512 projection, so
+  there is no separate scaling pass. The intro FMV is 24-bit MDEC uploaded
+  by the CPU and stays on the CPU presenter.
+- "Partly CPU" presents in the loading window are display cells no draw
+  touched yet (stale VRAM): the GPU target needs a one-time upload from CPU
+  VRAM when a buffer first becomes a target (cheap, rare).
 
 ## Verification
 
